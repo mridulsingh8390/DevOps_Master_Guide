@@ -905,11 +905,4 @@ terraform state list
 - [ ] password reset
 - [ ] datasource/dashboard
 
----
 
-## Final Note
-If you want, I can now generate **V5.1 add-on** with:
-1) 300+ extra kubectl commands by resource category,  
-2) 50+ Dockerfile patterns,  
-3) 100+ Ansible task snippets (package/service/file/template/systemd/user/firewall),  
-4) Jenkins shared library and matrix pipeline examples.
