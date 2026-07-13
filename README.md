@@ -1,195 +1,127 @@
-# DevOps V5 Ultra-Long Command Encyclopedia (Ubuntu 24.04, Local/On-Prem Only)
+# DevOps Complete Learning Guide (Ubuntu 24.04, Local/On-Prem)
+## Git • Jenkins • Ansible • Docker (DCA) • Terraform • Kubernetes (Core + Advanced Objects) • Prometheus • Grafana
 
-> Single-file, step-by-step, command-first handbook for:
-- Git
-- Jenkins
-- Ansible (Playbook, Roles, Vault)
-- Docker (DCA scope + Dockerfiles)
-- Terraform
-- Kubernetes (kubeadm + kubectl catalog)
-- Prometheus
-- Grafana
-- Troubleshooting + interview + validation checklist
+> Beginner-friendly + command explanations.  
+> Each section includes: **Why**, **Commands**, **Verify**, **Common issues**.
 
 ---
 
-## 0. Base Setup
+## 0) Prerequisites
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y \
-curl wget git vim nano jq yq unzip zip tree htop btop net-tools dnsutils telnet nmap \
-ca-certificates gnupg lsb-release software-properties-common apt-transport-https \
-build-essential python3 python3-pip python3-venv rsync tmux
+sudo apt install -y curl wget git vim nano jq yq unzip zip tree htop net-tools dnsutils \
+ca-certificates gnupg lsb-release software-properties-common apt-transport-https
 ```
 
 ```bash
-mkdir -p ~/devops-lab/{git,jenkins,ansible,docker,terraform,k8s,monitoring,project,notes}
+mkdir -p ~/devops-lab/{git,jenkins,ansible,docker,terraform,k8s,monitoring,project}
 cd ~/devops-lab
 ```
 
 ---
 
-## 1. Git — Ultra Command Catalog
+## 1) Git
 
-## Config
+## Why Git?
+Track changes, collaborate safely, recover work.
+
+## Setup
 ```bash
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 git config --global init.defaultBranch main
 git config --global core.editor vim
-git config --global color.ui auto
-git config --global fetch.prune true
-git config --global rerere.enabled true
 git config --list
 ```
 
-## SSH
+## SSH setup
 ```bash
 ssh-keygen -t ed25519 -C "you@example.com"
 eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519
 cat ~/.ssh/id_ed25519.pub
-ssh -T git@github.com
 ```
 
-## Repo lifecycle
+## Core workflow
 ```bash
 git init
 git clone <repo_url>
-git clone -b <branch> <repo_url>
-git remote -v
-git remote add origin <repo_url>
-git remote set-url origin <new_url>
-git fetch --all --prune
-git pull
+git checkout -b feature/login
+git add .
+git commit -m "feat: login feature"
 git pull --rebase
-git push -u origin main
+git push -u origin feature/login
 ```
 
-## Branching
-```bash
-git branch
-git branch -a
-git switch -c feature/x
-git checkout -b feature/x
-git switch main
-git merge feature/x
-git branch -d feature/x
-git branch -D feature/x
-git push origin --delete feature/x
-```
-
-## Commits/staging
+## Recovery and advanced
 ```bash
 git status
-git add .
-git add -p
-git commit -m "feat: message"
-git commit --amend
-```
-
-## Rebase/cherry-pick
-```bash
+git stash
+git stash list
+git stash pop
 git rebase main
-git rebase -i HEAD~5
-git rebase --continue
-git rebase --abort
 git cherry-pick <sha>
-git cherry-pick --abort
-```
-
-## Undo/recovery
-```bash
-git restore <file>
-git restore --staged <file>
 git reset --soft HEAD~1
-git reset --mixed HEAD~1
-git reset --hard HEAD~1
 git revert <sha>
 git reflog
-```
-
-## Stash
-```bash
-git stash
-git stash push -m "wip"
-git stash list
-git stash show -p stash@{0}
-git stash apply stash@{0}
-git stash pop
-git stash drop stash@{0}
-```
-
-## Logs/diff/tags
-```bash
 git log --oneline --graph --decorate --all
-git show <sha>
-git diff
-git diff --staged
-git blame <file>
-git tag -a v1.0.0 -m "release"
-git push --tags
 ```
 
 ---
 
-## 2. Jenkins — Installation + Admin + Pipeline + Backup
+## 2) Jenkins
+
+## Why Jenkins?
+Automates build/test/deploy pipeline.
 
 ## Install
 ```bash
 sudo apt install -y fontconfig openjdk-21-jre
-java -version
 curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | sudo tee /usr/share/keyrings/jenkins-keyring.asc >/dev/null
 echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list >/dev/null
-sudo apt update
-sudo apt install -y jenkins
+sudo apt update && sudo apt install -y jenkins
 sudo systemctl enable --now jenkins
 sudo systemctl status jenkins
 ```
 
-Get initial password:
+Get unlock password:
 ```bash
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ```
 
-Service ops:
+## Service management
 ```bash
 sudo systemctl restart jenkins
 sudo journalctl -u jenkins -f
 ```
 
-Backup/restore:
-```bash
-sudo systemctl stop jenkins
-sudo tar -czf /tmp/jenkins_home_$(date +%F).tar.gz /var/lib/jenkins
-sudo systemctl start jenkins
-```
-
-```bash
-sudo systemctl stop jenkins
-sudo tar -xzf /tmp/jenkins_home_YYYY-MM-DD.tar.gz -C /
-sudo chown -R jenkins:jenkins /var/lib/jenkins
-sudo systemctl start jenkins
-```
-
-Jenkinsfile:
+## Pipeline example
 ```groovy
 pipeline {
   agent any
-  options { timestamps() }
   stages {
-    stage('Checkout') { steps { checkout scm } }
-    stage('Build')    { steps { sh 'docker build -t demo:${BUILD_NUMBER} .' } }
-    stage('Test')     { steps { sh 'echo test' } }
-    stage('Deploy')   { steps { sh 'echo deploy' } }
+    stage('Checkout'){ steps{ checkout scm } }
+    stage('Build'){ steps{ sh 'echo Build' } }
+    stage('Test'){ steps{ sh 'echo Test' } }
+    stage('Deploy'){ steps{ sh 'echo Deploy' } }
   }
 }
 ```
 
+## Backup/Restore
+```bash
+sudo systemctl stop jenkins
+sudo tar -czf /tmp/jenkins_backup_$(date +%F).tar.gz /var/lib/jenkins
+sudo systemctl start jenkins
+```
+
 ---
 
-## 3. Ansible — Adhoc + Playbooks + Roles + Vault
+## 3) Ansible (Playbook + Roles + Vault)
+
+## Why Ansible?
+Agentless configuration management and automation.
 
 ## Install
 ```bash
@@ -197,28 +129,22 @@ sudo apt install -y ansible
 ansible --version
 ```
 
-Inventory (`inventory.ini`)
+## Inventory (`inventory.ini`)
 ```ini
 [web]
 192.168.1.10 ansible_user=ubuntu
 192.168.1.11 ansible_user=ubuntu
-
-[db]
-192.168.1.20 ansible_user=ubuntu
 ```
 
-Adhoc:
+## Adhoc
 ```bash
 ansible all -i inventory.ini -m ping
 ansible web -i inventory.ini -a "uptime"
-ansible all -i inventory.ini -m shell -a "df -h"
 ansible all -i inventory.ini -m apt -a "name=nginx state=present update_cache=yes" --become
 ansible all -i inventory.ini -m service -a "name=nginx state=started enabled=yes" --become
-ansible all -i inventory.ini -m user -a "name=devops state=present groups=sudo append=yes" --become
-ansible all -i inventory.ini -m setup
 ```
 
-Playbook (`site.yml`)
+## Playbook (`site.yml`)
 ```yaml
 - hosts: web
   become: yes
@@ -237,112 +163,85 @@ Run:
 ```bash
 ansible-playbook -i inventory.ini site.yml
 ansible-playbook -i inventory.ini site.yml --check --diff
-ansible-playbook -i inventory.ini site.yml --limit web -vvv
 ```
 
-Roles:
+## Roles
 ```bash
 ansible-galaxy init roles/nginx
-ansible-galaxy list
 ```
 
-Vault:
+## Vault
 ```bash
 ansible-vault create secrets.yml
 ansible-vault edit secrets.yml
 ansible-vault view secrets.yml
-ansible-vault encrypt secrets.yml
-ansible-vault decrypt secrets.yml
-ansible-vault rekey secrets.yml
 ansible-playbook -i inventory.ini site.yml --ask-vault-pass
 ```
 
 ---
 
-## 4. Docker — DCA Full + Dockerfile Encyclopedia
+## 4) Docker (DCA-focused + Dockerfiles)
 
-## Install Docker
+## Why Docker?
+Portable, reproducible runtime for applications.
+
+## Install
 ```bash
 sudo apt install -y ca-certificates curl gnupg
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-newgrp docker
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER && newgrp docker
 ```
 
-Core:
+## Core commands
 ```bash
 docker version
 docker info
-docker ps
 docker ps -a
 docker run -d --name web -p 8080:80 nginx
 docker logs -f web
 docker exec -it web sh
 docker inspect web
-docker stats
-docker events
 docker stop web && docker rm web
 ```
 
-Images:
+## Images
 ```bash
-docker images
-docker pull nginx:latest
 docker build -t myapp:v1 .
+docker images
 docker tag myapp:v1 myrepo/myapp:v1
 docker push myrepo/myapp:v1
-docker rmi myapp:v1
 docker image prune -f
-docker system prune -a
 ```
 
-Volumes/networks:
+## Volumes/Networks
 ```bash
 docker volume create app-vol
-docker volume ls
 docker network create app-net
-docker network ls
 docker run -d --name app --network app-net nginx
-docker network inspect app-net
 ```
 
-Compose:
+## Compose
 ```bash
 docker compose up -d
-docker compose ps
 docker compose logs -f
 docker compose down
-docker compose down -v
 ```
 
-Swarm:
+## Swarm (DCA)
 ```bash
 docker swarm init
 docker service create --name web --replicas 2 -p 8080:80 nginx
 docker service ls
 docker service scale web=4
-docker service update --image nginx:alpine web
 docker service rollback web
-docker service rm web
-docker swarm leave --force
 ```
 
-Secrets/config:
-```bash
-echo "mypassword" | docker secret create db_pass -
-docker secret ls
-docker secret rm db_pass
-```
+## Dockerfile examples
 
-Dockerfile examples:
-
-Python:
+### Python
 ```dockerfile
 FROM python:3.12-slim
 WORKDIR /app
@@ -353,7 +252,7 @@ EXPOSE 5000
 CMD ["python","app.py"]
 ```
 
-Node:
+### Node
 ```dockerfile
 FROM node:20-alpine
 WORKDIR /usr/src/app
@@ -364,7 +263,7 @@ EXPOSE 3000
 CMD ["node","server.js"]
 ```
 
-Java multi-stage:
+### Java multi-stage
 ```dockerfile
 FROM maven:3.9.8-eclipse-temurin-17 AS builder
 WORKDIR /build
@@ -379,43 +278,32 @@ EXPOSE 8080
 ENTRYPOINT ["java","-jar","app.jar"]
 ```
 
-Go multi-stage:
+### Go multi-stage
 ```dockerfile
 FROM golang:1.22 AS builder
 WORKDIR /src
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app main.go
-
 FROM gcr.io/distroless/static:nonroot
 COPY --from=builder /src/app /app
-EXPOSE 8080
-USER nonroot:nonroot
 ENTRYPOINT ["/app"]
 ```
 
-Nginx static:
-```dockerfile
-FROM nginx:alpine
-COPY ./site /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx","-g","daemon off;"]
-```
-
-`.dockerignore`
+### `.dockerignore`
 ```gitignore
 .git
-.gitignore
 node_modules/
 __pycache__/
 *.log
 .env
-dist/
-build/
 ```
 
 ---
 
-## 5. Terraform — Full Local Command Workflow
+## 5) Terraform
+
+## Why Terraform?
+Infrastructure as code with reproducible state.
 
 ## Install
 ```bash
@@ -425,88 +313,64 @@ sudo apt update && sudo apt install -y terraform
 terraform version
 ```
 
-Core:
+## Workflow
 ```bash
 terraform init
-terraform fmt -recursive
+terraform fmt
 terraform validate
 terraform plan
-terraform plan -out=tfplan
-terraform apply tfplan
-terraform apply -auto-approve
-terraform destroy -auto-approve
+terraform apply
+terraform destroy
 ```
 
-State/workspace:
+## State/workspace
 ```bash
 terraform state list
 terraform state show <resource>
-terraform state pull
-terraform import <resource_address> <id>
-terraform force-unlock <LOCK_ID>
 terraform workspace list
 terraform workspace new dev
 terraform workspace select dev
-terraform workspace show
 terraform console
-terraform graph
 ```
 
-Local sample (`main.tf`):
+Example `main.tf`:
 ```hcl
 terraform {
   required_version = ">= 1.5.0"
 }
 provider "local" {}
-
 resource "local_file" "demo" {
   filename = "demo.txt"
-  content  = "Terraform Local Works"
+  content  = "Terraform local demo"
 }
 ```
 
 ---
 
-## 6. Kubernetes — kubeadm + kubectl Catalog
+# 6) Kubernetes (Core + Advanced Objects)
 
-## Install
+## 6.1 Install Kubernetes (kubeadm)
+
 ```bash
 sudo swapoff -a
 sudo sed -i '/ swap / s/^/#/' /etc/fstab
-
-cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
-overlay
-br_netfilter
-EOF
-sudo modprobe overlay
-sudo modprobe br_netfilter
-
-cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
-net.bridge.bridge-nf-call-iptables=1
-net.bridge.bridge-nf-call-ip6tables=1
-net.ipv4.ip_forward=1
-EOF
-sudo sysctl --system
-
 sudo apt install -y containerd
 sudo mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
 sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-sudo systemctl restart containerd
-sudo systemctl enable containerd
+sudo systemctl restart containerd && sudo systemctl enable containerd
+```
 
+```bash
 sudo apt-get install -y apt-transport-https ca-certificates curl gpg
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-sudo apt update
-sudo apt install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
+sudo apt update && sudo apt install -y kubelet kubeadm kubectl
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16
 ```
 
-Init cluster:
 ```bash
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
 mkdir -p $HOME/.kube
 sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -514,321 +378,536 @@ kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/
 kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 ```
 
-Core kubectl:
-```bash
-kubectl cluster-info
-kubectl get nodes -o wide
-kubectl get ns
-kubectl create ns dev
-kubectl get all -A
-kubectl api-resources
-kubectl config get-contexts
-kubectl config current-context
+---
+
+## 6.2 Kubernetes Objects (All Important)
+
+### 1. Namespace
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
 ```
 
-Workloads/services:
-```bash
-kubectl create deployment nginx --image=nginx
-kubectl scale deploy nginx --replicas=3
-kubectl set image deploy/nginx nginx=nginx:alpine
-kubectl rollout status deploy/nginx
-kubectl rollout history deploy/nginx
-kubectl rollout undo deploy/nginx
-kubectl expose deploy nginx --port=80 --type=NodePort
-kubectl get svc
-kubectl port-forward svc/nginx 8080:80
+### 2. Pod
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.27
 ```
 
-Debug:
-```bash
-kubectl get pods -A
-kubectl describe pod <pod> -n <ns>
-kubectl logs -f <pod> -n <ns>
-kubectl logs <pod> --previous -n <ns>
-kubectl exec -it <pod> -n <ns> -- sh
-kubectl get events -A --sort-by=.lastTimestamp
-kubectl top nodes
-kubectl top pods -A
+### 3. ReplicaSet
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-rs
+  namespace: dev
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: nginx-rs}}
+  template:
+    metadata: {labels: {app: nginx-rs}}
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27
 ```
 
-Config/secret:
-```bash
-kubectl create configmap app-config --from-literal=ENV=prod
-kubectl create secret generic app-secret --from-literal=password=Pass@123
-kubectl get configmap,secret
+### 4. Deployment
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+  namespace: dev
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: nginx-deploy}}
+  template:
+    metadata: {labels: {app: nginx-deploy}}
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27
 ```
 
-Node ops:
-```bash
-kubectl cordon <node>
-kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
-kubectl uncordon <node>
+### 5. StatefulSet
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+  namespace: dev
+spec:
+  serviceName: web
+  replicas: 2
+  selector: {matchLabels: {app: web}}
+  template:
+    metadata: {labels: {app: web}}
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27
 ```
 
-Lab reset:
-```bash
-sudo kubeadm reset -f
-rm -rf ~/.kube
+### 6. DaemonSet
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ds-agent
+  namespace: dev
+spec:
+  selector: {matchLabels: {app: ds-agent}}
+  template:
+    metadata: {labels: {app: ds-agent}}
+    spec:
+      containers:
+      - name: agent
+        image: busybox
+        command: ["sh","-c","sleep 3600"]
+```
+
+### 7. Job
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-job
+  namespace: dev
+spec:
+  template:
+    spec:
+      containers:
+      - name: hello
+        image: busybox
+        command: ["sh","-c","echo hello"]
+      restartPolicy: Never
+```
+
+### 8. CronJob
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hello-cron
+  namespace: dev
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: hello
+            image: busybox
+            command: ["sh","-c","date; echo hi"]
+          restartPolicy: OnFailure
+```
+
+### 9. Service (ClusterIP/NodePort)
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-svc
+  namespace: dev
+spec:
+  selector: {app: nginx-deploy}
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+```
+
+### 10. Ingress
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ing
+  namespace: dev
+spec:
+  rules:
+  - host: app.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-svc
+            port:
+              number: 80
+```
+
+### 11. ConfigMap
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: dev
+data:
+  APP_ENV: "dev"
+```
+
+### 12. Secret
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: dev
+type: Opaque
+stringData:
+  DB_PASSWORD: "Strong123!"
+```
+
+### 13. PV
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv
+spec:
+  capacity: {storage: 5Gi}
+  accessModes: ["ReadWriteOnce"]
+  hostPath: {path: /mnt/data}
+```
+
+### 14. PVC
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-pvc
+  namespace: dev
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: {storage: 1Gi}
+```
+
+### 15. StorageClass
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+```
+
+### 16. ServiceAccount
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-sa
+  namespace: dev
+```
+
+### 17. Role + RoleBinding
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: dev
+  name: pod-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get","list","watch"]
+```
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: dev
+subjects:
+- kind: ServiceAccount
+  name: app-sa
+  namespace: dev
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+```
+
+### 18. ClusterRole + ClusterRoleBinding
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-reader
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get","list","watch"]
+```
+
+### 19. NetworkPolicy
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+  namespace: dev
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+```
+
+### 20. ResourceQuota
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: dev
+spec:
+  hard:
+    pods: "20"
+    requests.cpu: "2"
+    requests.memory: 2Gi
+```
+
+### 21. LimitRange
+```yaml
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-limits
+  namespace: dev
+spec:
+  limits:
+  - type: Container
+    default: {cpu: "500m", memory: "512Mi"}
+    defaultRequest: {cpu: "100m", memory: "128Mi"}
+```
+
+### 22. HPA
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nginx-hpa
+  namespace: dev
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deploy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+```
+
+### 23. PodDisruptionBudget
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nginx-pdb
+  namespace: dev
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nginx-deploy
+```
+
+### 24. PriorityClass
+```yaml
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 100000
+globalDefault: false
+description: "High priority"
+```
+
+### 25. RuntimeClass
+```yaml
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: runc
+handler: runc
+```
+
+### 26. CRD (basic example)
+```yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.example.com
+spec:
+  group: example.com
+  names:
+    kind: Widget
+    plural: widgets
+    singular: widget
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
 ```
 
 ---
 
-## 7. Prometheus — Install + Config + PromQL
+## 6.3 Advanced Pod Patterns
 
-Install:
+### Probes
+- readiness: ready for traffic
+- liveness: container health restart
+- startup: long startup protection
+
+### Init containers
+Run setup before main container.
+
+### Sidecar
+Helper container in same pod.
+
+### Ephemeral debug container
 ```bash
-sudo useradd --no-create-home --shell /bin/false prometheus || true
-cd /tmp
-wget https://github.com/prometheus/prometheus/releases/download/v2.54.1/prometheus-2.54.1.linux-amd64.tar.gz
-tar -xvf prometheus-2.54.1.linux-amd64.tar.gz
-cd prometheus-2.54.1.linux-amd64
-sudo mkdir -p /etc/prometheus /var/lib/prometheus
-sudo cp prometheus promtool /usr/local/bin/
-sudo cp -r consoles console_libraries /etc/prometheus/
-sudo cp prometheus.yml /etc/prometheus/
-sudo chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
+kubectl debug -it <pod> -n dev --image=busybox --target=<container>
 ```
 
-Service:
-```bash
-cat <<EOF | sudo tee /etc/systemd/system/prometheus.service
-[Unit]
-Description=Prometheus
-After=network-online.target
-Wants=network-online.target
-[Service]
-User=prometheus
-ExecStart=/usr/local/bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/var/lib/prometheus --web.enable-lifecycle
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo systemctl daemon-reload
-sudo systemctl enable --now prometheus
-```
+---
 
-Node exporter:
-```bash
-sudo useradd --no-create-home --shell /bin/false node_exporter || true
-cd /tmp
-wget https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
-tar -xvf node_exporter-1.8.2.linux-amd64.tar.gz
-sudo cp node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/
-```
+## 6.4 Scheduling & Security Advanced
+
+- nodeSelector
+- node affinity / pod anti-affinity
+- taints and tolerations
+- topology spread constraints
+- securityContext (runAsNonRoot, capabilities drop)
+- Pod Security Admission labels
+- RBAC `kubectl auth can-i`
+
+---
+
+## 6.5 kubectl Must-Know Commands
 
 ```bash
-cat <<EOF | sudo tee /etc/systemd/system/node_exporter.service
-[Unit]
-Description=Node Exporter
-After=network.target
-[Service]
-User=node_exporter
-ExecStart=/usr/local/bin/node_exporter
-[Install]
-WantedBy=default.target
-EOF
-sudo systemctl daemon-reload
-sudo systemctl enable --now node_exporter
+kubectl get all -A
+kubectl get pods -A -o wide
+kubectl describe pod <pod> -n <ns>
+kubectl logs -f <pod> -n <ns>
+kubectl exec -it <pod> -n <ns> -- sh
+kubectl get events -A --sort-by=.lastTimestamp
+kubectl rollout status deploy/<name> -n <ns>
+kubectl rollout undo deploy/<name> -n <ns>
+kubectl top nodes
+kubectl top pods -A
+kubectl auth can-i create pods -n dev
+kubectl explain deployment.spec.template.spec.containers
 ```
 
-Prometheus config:
+---
+
+## 6.6 etcd backup (important)
+
 ```bash
-cat <<EOF | sudo tee /etc/prometheus/prometheus.yml
-global:
-  scrape_interval: 15s
-scrape_configs:
-- job_name: prometheus
-  static_configs:
-  - targets: ['localhost:9090']
-- job_name: node
-  static_configs:
-  - targets: ['localhost:9100']
-EOF
-sudo promtool check config /etc/prometheus/prometheus.yml
-sudo systemctl restart prometheus
+sudo ETCDCTL_API=3 etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /tmp/etcd-snapshot.db
 ```
 
-Ops:
+---
+
+## 7) Prometheus
+
+Install binaries + service + node exporter (same as earlier).  
+Verify:
 ```bash
 curl -s http://localhost:9090/-/healthy
-curl -s http://localhost:9090/api/v1/targets | jq
-curl -X POST http://localhost:9090/-/reload
 ```
 
 PromQL:
 ```promql
 up
-up{job="node"}
 rate(node_cpu_seconds_total[5m])
-100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
 (node_memory_MemTotal_bytes-node_memory_MemAvailable_bytes)/node_memory_MemTotal_bytes*100
-rate(node_network_receive_bytes_total[5m])
 ```
 
 ---
 
-## 8. Grafana — Install + Configure
+## 8) Grafana
 
 Install:
 ```bash
-cd /tmp
 wget https://dl.grafana.com/oss/release/grafana_11.1.4_amd64.deb
-sudo apt install -y adduser libfontconfig1 musl
 sudo dpkg -i grafana_11.1.4_amd64.deb
 sudo systemctl enable --now grafana-server
 ```
 
-Ops:
+Reset password:
 ```bash
-sudo systemctl status grafana-server
-sudo journalctl -u grafana-server -f
 sudo grafana-cli admin reset-admin-password 'StrongPassword@123'
 ```
 
-Access:
-- `http://<ip>:3000`
-- Default: `admin/admin`
-
-Datasource:
-- Prometheus URL: `http://localhost:9090`
+Add Prometheus datasource: `http://localhost:9090`
 
 ---
 
-## 9. End-to-End Local Mini Project
+## 9) Troubleshooting Quick Matrix
 
-Structure:
-```bash
-mkdir -p ~/devops-lab/project/{app,k8s,jenkins,ansible,terraform}
-```
-
-`app/app.py`
-```python
-from flask import Flask
-app=Flask(__name__)
-@app.route("/")
-def home():
-    return "Hello DevOps"
-if __name__=="__main__":
-    app.run(host="0.0.0.0",port=5000)
-```
-
-`app/requirements.txt`
-```txt
-flask==3.0.3
-```
-
-`app/Dockerfile`
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py .
-EXPOSE 5000
-CMD ["python","app.py"]
-```
-
-Build/run:
-```bash
-cd ~/devops-lab/project/app
-docker build -t flask-demo:v1 .
-docker run -d --name flask-demo -p 5000:5000 flask-demo:v1
-curl http://localhost:5000
-```
-
-K8s deploy:
-`k8s/deployment.yaml`
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: flask-demo}
-spec:
-  replicas: 2
-  selector: {matchLabels: {app: flask-demo}}
-  template:
-    metadata: {labels: {app: flask-demo}}
-    spec:
-      containers:
-      - name: flask-demo
-        image: flask-demo:v1
-        imagePullPolicy: IfNotPresent
-        ports: [{containerPort: 5000}]
-```
-
-`k8s/service.yaml`
-```yaml
-apiVersion: v1
-kind: Service
-metadata: {name: flask-demo-svc}
-spec:
-  type: NodePort
-  selector: {app: flask-demo}
-  ports:
-  - port: 80
-    targetPort: 5000
-    nodePort: 30080
-```
-
-```bash
-kubectl apply -f ~/devops-lab/project/k8s/deployment.yaml
-kubectl apply -f ~/devops-lab/project/k8s/service.yaml
-kubectl get all
-```
-
----
-
-## 10. Troubleshooting Matrix
-
-## OS/Network
-```bash
-ip a
-ip r
-ss -tulnp
-sudo ufw status
-ping -c 4 8.8.8.8
-nslookup google.com
-```
-
-## Jenkins
-```bash
-sudo systemctl status jenkins
-sudo journalctl -u jenkins -f
-sudo ss -tulnp | grep 8080
-```
-
-## Docker
-```bash
-docker info
-docker ps -a
-docker logs <container>
-sudo journalctl -u docker -f
-```
-
-## Kubernetes
+### Kubernetes
 ```bash
 kubectl get nodes
-kubectl get pods -A
-kubectl get events -A --sort-by=.lastTimestamp
 kubectl describe node <node>
+kubectl get pods -A
 kubectl describe pod <pod> -n <ns>
 kubectl logs <pod> -n <ns> --previous
 sudo journalctl -u kubelet -xe
 ```
 
-## Prometheus/Grafana
+### Docker
 ```bash
-sudo systemctl status prometheus
-sudo systemctl status grafana-server
-curl -s http://localhost:9090/-/healthy
-curl -I http://localhost:3000/login
+docker info
+docker logs <container>
+sudo journalctl -u docker -f
 ```
 
-## Ansible
+### Jenkins
+```bash
+sudo systemctl status jenkins
+sudo journalctl -u jenkins -f
+```
+
+### Ansible
 ```bash
 ansible all -i inventory.ini -m ping -vvv
-ansible-inventory -i inventory.ini --graph
 ```
 
-## Terraform
+### Terraform
 ```bash
 terraform validate
 terraform plan
@@ -837,72 +916,17 @@ terraform state list
 
 ---
 
-## 11. Interview Drill (Quick)
+## 10) Final Validation Checklist
 
-- Git: merge vs rebase, reset vs revert, reflog recovery  
-- Jenkins: declarative/scripted, credentials, agent strategies  
-- Ansible: idempotency, var precedence, vault usage  
-- Docker: CMD vs ENTRYPOINT, volume vs bind, networking modes  
-- Terraform: state importance, workspaces, import  
-- Kubernetes: Deployment vs StatefulSet, probes, service types  
-- Prometheus: pull model, labels/cardinality  
-- Grafana: datasource + alert/dashboard basics
+- [ ] Git commands + recovery
+- [ ] Jenkins install + pipeline + backup
+- [ ] Ansible inventory + playbook + role + vault
+- [ ] Docker core + compose + swarm + Dockerfile examples
+- [ ] Terraform init→destroy + state/workspace
+- [ ] Kubernetes core objects done
+- [ ] Kubernetes advanced objects done
+- [ ] Prometheus + node exporter working
+- [ ] Grafana datasource/dashboard configured
+- [ ] Troubleshooting commands practiced
 
 ---
-
-## 12. Self-Validation Tracker (Nothing Missed)
-
-### Git
-- [ ] Config
-- [ ] SSH
-- [ ] Branching
-- [ ] Rebase/cherry-pick
-- [ ] Recovery
-- [ ] Stash
-- [ ] Tags
-
-### Jenkins
-- [ ] Install
-- [ ] Initial unlock
-- [ ] Pipeline
-- [ ] Backup/restore
-- [ ] Troubleshooting
-
-### Ansible
-- [ ] Inventory
-- [ ] Adhoc
-- [ ] Playbooks
-- [ ] Roles
-- [ ] Vault
-
-### Docker
-- [ ] Engine install
-- [ ] Core commands
-- [ ] Compose
-- [ ] Swarm
-- [ ] Secrets
-- [ ] Dockerfile examples
-- [ ] .dockerignore
-
-### Terraform
-- [ ] init/fmt/validate/plan/apply/destroy
-- [ ] state/import/workspace/console
-
-### Kubernetes
-- [ ] kubeadm install/init
-- [ ] CNI
-- [ ] kubectl commands
-- [ ] debug/reset
-
-### Prometheus
-- [ ] install/service
-- [ ] node exporter
-- [ ] scrape config
-- [ ] promtool/promql
-
-### Grafana
-- [ ] install/service
-- [ ] password reset
-- [ ] datasource/dashboard
-
-
