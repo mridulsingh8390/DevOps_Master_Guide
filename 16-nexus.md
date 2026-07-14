@@ -340,8 +340,57 @@ sudo tar -czf /tmp/nexus-backup-$(date +%F).tar.gz /opt/sonatype-work/nexus3
 
 ---
 
+## 17) Raw/Generic Repositories
+
+## Why
+Not everything is a Maven/npm/Docker artifact — installers, reports, tarballs, firmware images, etc. need a generic file store too.
+
+## Create a raw hosted repo (UI)
+Repository → Create repository → **raw (hosted)**, name `raw-artifacts`.
+
+## Upload via REST API
+```bash
+curl -u admin:<password> \
+  --upload-file build.tar.gz \
+  http://<nexus-host>:8081/repository/raw-artifacts/releases/1.0/build.tar.gz
+```
+
+## Download
+```bash
+curl -u admin:<password> \
+  -O http://<nexus-host>:8081/repository/raw-artifacts/releases/1.0/build.tar.gz
+```
+
+Common use: storing deployment bundles, generated documentation, or QA reports as immutable, versioned files.
+
+---
+
+## 18) S3 Blob Store (Scalable Backend Storage)
+
+## Why
+The default file-based blob store doesn't scale well or survive single-host failure. Nexus Pro/OSS supports S3-compatible blob stores for durable, horizontally scalable storage.
+
+## Create via UI
+Administration → Repository → Blob Stores → Create blob store → **S3**
+- Bucket: `nexus-blobs`
+- Region: e.g. `us-east-1`
+- Access/secret key or IAM role (if running on EC2)
+
+## Point a repository at the new blob store
+When creating/editing a repository, set **Blob store** to the S3-backed store instead of `default`.
+
+## Migrate existing data (high level)
+1. Create new S3 blob store
+2. Use Nexus's blob store move/task feature (Tasks → "Blob store: Move" in newer versions) or re-publish artifacts to a repo pointed at the new store
+3. Verify integrity before decommissioning the old store
+
+Note: S3 blob store support may require Nexus Pro depending on version — check licensing for your deployment.
+
+---
+
 ## Final Notes
 
 - Nexus is foundational for enterprise CI/CD maturity.
 - Treat artifact repository as critical infrastructure.
 - Promote artifacts through environments instead of rebuilding each stage.
+- Use raw repos for non-package artifacts, and move to S3-backed blob stores once single-host storage becomes a bottleneck.
