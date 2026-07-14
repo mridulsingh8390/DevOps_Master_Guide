@@ -415,9 +415,103 @@ argocd app delete <app>
 
 ---
 
+## 18) ApplicationSets (Generate Many Applications)
+
+## Why
+Manually creating one `Application` per cluster/environment/microservice doesn't scale. `ApplicationSet` generates Applications from a template + generator (list, cluster, Git directory, matrix).
+
+## Example: one app per folder in a Git repo
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services
+  namespace: argocd
+spec:
+  generators:
+  - git:
+      repoURL: https://github.com/<org>/<repo>.git
+      revision: main
+      directories:
+      - path: apps/*
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/<org>/<repo>.git
+        targetRevision: main
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+```
+
+## Example: one app per cluster (multi-cluster fleet)
+```yaml
+spec:
+  generators:
+  - clusters: {}
+  template:
+    metadata:
+      name: '{{name}}-monitoring'
+    spec:
+      source:
+        repoURL: https://github.com/<org>/platform.git
+        path: monitoring
+      destination:
+        server: '{{server}}'
+        namespace: monitoring
+```
+
+Apply and check:
+```bash
+kubectl apply -f appset.yaml
+kubectl get applicationsets -n argocd
+kubectl get applications -n argocd
+```
+
+---
+
+## 19) Notifications Controller
+
+## Why
+Get Slack/email/webhook alerts on sync success/failure/health changes without polling the UI.
+
+## Enable a trigger + template (ConfigMap `argocd-notifications-cm`)
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.slack: |
+    token: $slack-token
+  template.app-sync-failed: |
+    message: "Application {{.app.metadata.name}} sync failed."
+  trigger.on-sync-failed: |
+    - when: app.status.operationState.phase in ['Error', 'Failed']
+      send: [app-sync-failed]
+```
+
+## Subscribe an application to the trigger (annotation)
+```bash
+kubectl annotate app demo-app -n argocd \
+  notifications.argoproj.io/subscribe.on-sync-failed.slack=my-alerts-channel
+```
+
+---
+
 ## Final Notes
 
 - Keep all deployable state in Git (single source of truth).
 - Start manual sync first; enable auto-sync when stable.
 - Use AppProjects and RBAC early for team boundaries.
 - Pair Argo CD with Helm/Kustomize for scalable GitOps workflows.
+- Once managing more than a handful of apps/clusters, adopt ApplicationSets; wire up Notifications so failures surface proactively.
