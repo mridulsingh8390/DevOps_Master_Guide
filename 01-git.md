@@ -535,8 +535,135 @@ git push -u origin feature/new-task
 
 ---
 
+## 18) Git LFS (Large File Storage)
+
+## Why
+Git stores every version of every file forever; large binaries (models, assets, media) bloat the repo. LFS stores a pointer in Git and the actual blob on a remote LFS store.
+
+## Install and initialize
+```bash
+sudo apt install -y git-lfs
+git lfs install
+```
+
+## Track file types
+```bash
+git lfs track "*.psd"
+git lfs track "*.bin"
+git add .gitattributes
+```
+
+## Normal workflow after tracking
+```bash
+git add large-file.psd
+git commit -m "add design asset"
+git push
+```
+
+## Inspect
+```bash
+git lfs ls-files
+git lfs status
+```
+
+---
+
+## 19) Worktrees (Multiple Working Copies, One Repo)
+
+## Why
+Work on two branches simultaneously without stashing/switching — useful for hotfixes while mid-feature.
+
+```bash
+git worktree add ../repo-hotfix hotfix/urgent-bug
+git worktree list
+git worktree remove ../repo-hotfix
+```
+
+Each worktree has its own working directory but shares the same `.git` history/objects.
+
+---
+
+## 20) Signed Commits and Tags (GPG/SSH)
+
+## Why
+Prove commit authorship/integrity — increasingly required on shared/enterprise repos.
+
+## GPG signing
+```bash
+gpg --full-generate-key
+gpg --list-secret-keys --keyid-format=long
+git config --global user.signingkey <KEY_ID>
+git config --global commit.gpgsign true
+git commit -S -m "feat: signed commit"
+git tag -s v1.0.0 -m "signed release"
+```
+
+## SSH signing (simpler, uses existing SSH key)
+```bash
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+```
+
+## Verify
+```bash
+git log --show-signature -1
+```
+
+---
+
+## 21) Sparse Checkout (Monorepo Partial Clone)
+
+## Why
+Only check out the subdirectories you need from a huge monorepo.
+
+```bash
+git clone --filter=blob:none --no-checkout <repo_url>
+cd repo
+git sparse-checkout init --cone
+git sparse-checkout set services/api docs
+git checkout main
+```
+
+Add more paths later:
+```bash
+git sparse-checkout add services/frontend
+```
+
+---
+
+## 22) Native Git Hooks (vs pre-commit framework)
+
+## Why
+Local, repo-specific automation without extra tooling — useful for simple checks or when `pre-commit` isn't installed.
+
+## Location
+```bash
+ls .git/hooks
+```
+
+## Example: pre-commit hook blocking large files
+```bash
+cat <<'EOF' > .git/hooks/pre-commit
+#!/bin/bash
+MAX_SIZE=5000000
+for f in $(git diff --cached --name-only); do
+  if [ -f "$f" ] && [ $(stat -c%s "$f") -gt $MAX_SIZE ]; then
+    echo "ERROR: $f exceeds 5MB limit"
+    exit 1
+  fi
+done
+EOF
+chmod +x .git/hooks/pre-commit
+```
+
+Note: native hooks aren't versioned/shared by default (they live in `.git/hooks`, which isn't tracked) — this is why teams prefer the `pre-commit` framework for shared, versioned hooks. Use native hooks for personal, machine-local automation.
+
+---
+
 ## Final Notes
 
 - Prefer `revert` on shared branches, `reset` for local cleanup.
 - Use `--force-with-lease` instead of plain `--force`.
 - Learn `reflog`; it saves hours.
+- Use LFS for binaries, worktrees for parallel work, and signed commits where provenance matters.
