@@ -392,8 +392,97 @@ vault token lookup
 
 ---
 
+## 19) Kubernetes Auth Method
+
+## Why
+Let pods authenticate to Vault using their ServiceAccount token instead of static credentials — the standard pattern for apps running in-cluster.
+
+## Enable and configure
+```bash
+vault auth enable kubernetes
+
+vault write auth/kubernetes/config \
+  kubernetes_host="https://kubernetes.default.svc:443"
+```
+
+## Create a role binding a K8s ServiceAccount to a Vault policy
+```bash
+vault write auth/kubernetes/role/myapp \
+  bound_service_account_names=myapp-sa \
+  bound_service_account_namespaces=dev \
+  policies=dev-policy \
+  ttl=1h
+```
+
+## From inside a pod (using the projected SA token)
+```bash
+JWT=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+vault write auth/kubernetes/login role=myapp jwt=$JWT
+```
+
+---
+
+## 20) Vault Agent Injector (Automatic Secret Injection)
+
+## Why
+Instead of writing Vault API calls into every app, the Vault Agent Injector mutates pods via a webhook, injecting secrets as files into a sidecar — apps just read local files.
+
+## Install (Helm)
+```bash
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm install vault hashicorp/vault \
+  --set "injector.enabled=true" \
+  --set "server.dev.enabled=true" \
+  -n vault --create-namespace
+```
+
+## Annotate a Deployment to request injection
+```yaml
+metadata:
+  annotations:
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "myapp"
+    vault.hashicorp.com/agent-inject-secret-db-creds: "secret/data/dev/app"
+```
+
+The sidecar writes the rendered secret to `/vault/secrets/db-creds` inside the pod, refreshed automatically on lease renewal.
+
+---
+
+## 21) PKI Secrets Engine (Certificates as a Service)
+
+## Why
+Issue short-lived TLS certificates on demand instead of managing long-lived certs manually.
+
+## Enable and set up a root CA
+```bash
+vault secrets enable pki
+vault secrets tune -max-lease-ttl=87600h pki
+
+vault write pki/root/generate/internal \
+  common_name="example.com" ttl=87600h
+```
+
+## Configure a role for issuing certs
+```bash
+vault write pki/roles/example-dot-com \
+  allowed_domains="example.com" \
+  allow_subdomains=true \
+  max_ttl="720h"
+```
+
+## Issue a certificate
+```bash
+vault write pki/issue/example-dot-com common_name="app.example.com" ttl="24h"
+```
+
+Returns a cert, private key, and CA chain — apps or Vault Agent can request fresh certs before expiry, enabling automatic rotation.
+
+---
+
 ## Final Notes
 
 - Vault should be central secrets authority in serious DevOps setups.
 - Start with KV + policies + AppRole, then adopt dynamic secrets and transit.
 - Use TLS, audit logs, and secure key management for production.
+- In Kubernetes, prefer the Kubernetes auth method + Agent Injector over static tokens, and use PKI for short-lived certs.
