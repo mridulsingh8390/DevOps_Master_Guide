@@ -401,8 +401,130 @@ ansible-vault edit secret.yml
 
 ---
 
+## 20) Molecule (Role Testing Framework)
+
+## Why
+Roles quietly rot without tests — Molecule spins up a throwaway container/VM, applies your role, and asserts the result, all in CI.
+
+## Install and initialize
+```bash
+pip install --user molecule molecule-plugins[docker]
+cd roles/nginx
+molecule init scenario -d docker
+```
+
+## Run the test cycle
+```bash
+molecule test
+```
+This creates a container, converges (applies the role), runs idempotence checks (second apply should report zero changes), runs verification tests, then destroys the container.
+
+## Example verifier (`molecule/default/verify.yml`)
+```yaml
+- name: Verify
+  hosts: all
+  tasks:
+    - name: Check nginx is running
+      command: systemctl is-active nginx
+      register: result
+      failed_when: "'active' not in result.stdout"
+```
+
+---
+
+## 21) Execution Environments (ansible-builder / ansible-navigator)
+
+## Why
+"Works on my machine" is a real problem with Ansible's Python/collection dependency sprawl. Execution Environments package Ansible + collections + Python deps into a container image for consistent runs across dev/CI/AWX.
+
+## Define an environment (`execution-environment.yml`)
+```yaml
+version: 3
+dependencies:
+  galaxy: requirements.yml
+  python: requirements.txt
+```
+
+## Build
+```bash
+ansible-builder build -t myorg/ee-custom:1.0
+```
+
+## Run a playbook inside it
+```bash
+ansible-navigator run site.yml -i inventory.ini --execution-environment-image myorg/ee-custom:1.0
+```
+
+`ansible-navigator` also provides an interactive TUI for stepping through playbook runs and inspecting task results — useful for debugging complex roles.
+
+---
+
+## 22) Event-Driven Ansible (EDA)
+
+## Why
+Traditional Ansible runs on a schedule or by hand. EDA reacts to events (webhooks, log alerts, monitoring triggers) and runs remediation playbooks automatically.
+
+## Install
+```bash
+pip install --user ansible-rulebook
+ansible-galaxy collection install ansible.eda
+```
+
+## Minimal rulebook (`rulebook.yml`)
+```yaml
+- name: Restart service on alert
+  hosts: all
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+  rules:
+    - name: Restart nginx on alert
+      condition: event.payload.alert == "nginx_down"
+      action:
+        run_playbook:
+          name: restart-nginx.yml
+```
+
+## Run
+```bash
+ansible-rulebook --rulebook rulebook.yml -i inventory.ini
+```
+
+Now a POST to `http://host:5000` with `{"alert": "nginx_down"}` triggers the remediation playbook automatically — the bridge between monitoring/alerting and automated remediation.
+
+---
+
+## 23) ansible-lint (Deep Dive)
+
+## Why
+`ansible-lint` catches style, security, and correctness issues `--syntax-check` misses (e.g., using `command` where a module exists, missing `become`, unpinned package versions).
+
+## Run
+```bash
+ansible-lint site.yml
+ansible-lint roles/nginx
+```
+
+## Config (`.ansible-lint`)
+```yaml
+skip_list:
+  - yaml[line-length]
+exclude_paths:
+  - .cache/
+  - molecule/
+```
+
+## Common findings and fixes
+- `command-instead-of-module`: replace `command: systemctl restart nginx` with the `service`/`systemd` module
+- `no-changed-when`: shell/command tasks should set `changed_when` explicitly for idempotency reporting
+- `risky-file-permissions`: always set explicit `mode:` on `file`/`copy`/`template` tasks
+
+---
+
 ## Final Notes
 
 - Ansible is one of the fastest ways to standardize server operations.
 - Start with inventory + basic playbooks, then mature into roles + vault + CI validation.
 - Treat Ansible code like application code: lint, review, test, and version.
+- For team-scale usage, add Molecule tests to every role, standardize on an Execution Environment, and consider Event-Driven Ansible for automated remediation instead of purely scheduled runs.
