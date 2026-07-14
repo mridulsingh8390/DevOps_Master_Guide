@@ -897,8 +897,199 @@ kubectl top pods -A
 
 ---
 
+## 18) Multi-Node Cluster (Joining Worker Nodes)
+
+## Why
+The single-node lab in Section 2 taints removed only cover a single control-plane. Real clusters add worker nodes.
+
+## 18.1 On the control-plane, generate/print join command
+```bash
+kubeadm token create --print-join-command
+```
+
+## 18.2 On each worker node (after installing containerd + kubeadm/kubelet as in 2.2/2.3)
+```bash
+sudo kubeadm join <control-plane-ip>:6443 --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash>
+```
+
+## 18.3 Verify from control-plane
+```bash
+kubectl get nodes -o wide
+```
+
+## 18.4 Rejoining after token expiry
+```bash
+kubeadm token list
+kubeadm token create --ttl 2h --print-join-command
+```
+
+---
+
+## 19) Ingress Controller Installation
+
+## Why
+The `Ingress` object (Section 5.4) is just a spec — you need a controller actually running to implement it. Nginx Ingress Controller is the most common choice.
+
+## 19.1 Install via manifest
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.2/deploy/static/provider/cloud/deploy.yaml
+```
+
+## 19.2 Or via Helm (preferred for upgrades)
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  -n ingress-nginx --create-namespace
+```
+
+## 19.3 Verify
+```bash
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx
+```
+
+## 19.4 Full Ingress example referencing the controller's class
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-clusterip
+            port:
+              number: 80
+```
+
+Check ingress class:
+```bash
+kubectl get ingressclass
+```
+
+---
+
+## 20) Metrics Server (Required for HPA and `kubectl top`)
+
+## Install
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+```
+
+## Lab-only fix (self-signed kubelet certs)
+Metrics-server often fails TLS verification on kubeadm labs. Patch it:
+```bash
+kubectl patch deployment metrics-server -n kube-system --type='json' \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+```
+
+## Verify
+```bash
+kubectl get deployment metrics-server -n kube-system
+kubectl top nodes
+kubectl top pods -A
+```
+
+---
+
+## 21) Kustomize (Native Config Overlays)
+
+## Why
+Manage environment-specific variants (dev/staging/prod) of the same manifests without templating — built into `kubectl`.
+
+## 21.1 Base (`base/kustomization.yaml`)
+```yaml
+resources:
+  - deployment.yaml
+  - service.yaml
+```
+
+## 21.2 Overlay (`overlays/prod/kustomization.yaml`)
+```yaml
+resources:
+  - ../../base
+patches:
+  - path: replica-patch.yaml
+namespace: prod
+```
+
+`replica-patch.yaml`:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+spec:
+  replicas: 5
+```
+
+## 21.3 Build and apply
+```bash
+kubectl kustomize overlays/prod
+kubectl apply -k overlays/prod
+```
+
+---
+
+## 22) Admission Control / Policy Engines (OPA Gatekeeper, Kyverno)
+
+## Why
+NetworkPolicy and RBAC control traffic and access; policy engines enforce broader governance ("no `:latest` tags", "must have resource limits", "no privileged containers") at admission time.
+
+## 22.1 Kyverno (simpler YAML-native option)
+```bash
+kubectl create -f https://github.com/kyverno/kyverno/releases/latest/download/install.yaml
+```
+
+Example policy — require resource limits:
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+spec:
+  validationFailureAction: Enforce
+  rules:
+  - name: check-resources
+    match:
+      any:
+      - resources:
+          kinds: ["Pod"]
+    validate:
+      message: "CPU/memory limits are required"
+      pattern:
+        spec:
+          containers:
+          - resources:
+              limits:
+                cpu: "?*"
+                memory: "?*"
+```
+
+## 22.2 OPA Gatekeeper (Rego-based, more powerful/complex)
+```bash
+kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/master/deploy/gatekeeper.yaml
+```
+
+Both approaches intercept `kubectl apply` via admission webhooks and can block or audit non-compliant resources.
+
+---
+
 ## Final Notes
 
 - Focus first on Deployment + Service + ConfigMap + Secret + PVC + RBAC.
 - Then move to policies, autoscaling, and advanced scheduling.
 - In production, add strong security controls, backups, and monitoring from day one.
+- Add an Ingress controller and metrics-server early — most HPA and routing tasks depend on them.
+- Use Kustomize for environment overlays and a policy engine (Kyverno/Gatekeeper) for governance at scale.
