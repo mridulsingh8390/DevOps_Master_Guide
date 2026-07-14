@@ -370,9 +370,103 @@ tail -f /var/log/nginx/error.log
 
 ---
 
+## 18) Nginx as a Kubernetes Ingress Controller
+
+## Why
+The standalone Nginx skills above (reverse proxy, TLS, rate limiting, headers) map almost directly onto the Nginx Ingress Controller's annotations when Nginx runs inside Kubernetes instead of on a VM.
+
+## Install (see also the Kubernetes guide, Section 19)
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace
+```
+
+## Translate common VM-Nginx patterns to Ingress annotations
+
+Rate limiting:
+```yaml
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+```
+
+Basic auth (via a Secret instead of `.htpasswd` file):
+```bash
+htpasswd -c auth admin
+kubectl create secret generic basic-auth --from-file=auth -n dev
+```
+```yaml
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Restricted"
+```
+
+TLS termination (cert from a Secret, often issued by cert-manager):
+```yaml
+spec:
+  tls:
+  - hosts:
+    - app.example.com
+    secretName: app-tls
+```
+
+Custom snippet (raw nginx.conf injection, if the controller allows snippets):
+```yaml
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+```
+
+---
+
+## 19) ModSecurity (WAF Basics)
+
+## Why
+Rate limiting and access control stop abuse patterns; a WAF (Web Application Firewall) inspects request content for injection/XSS/known attack signatures.
+
+## Enable ModSecurity module (Ubuntu, standalone Nginx)
+```bash
+sudo apt install -y libnginx-mod-http-modsecurity
+```
+
+Enable in `/etc/nginx/nginx.conf` (`http {}` block):
+```nginx
+modsecurity on;
+modsecurity_rules_file /etc/nginx/modsec/main.conf;
+```
+
+`/etc/nginx/modsec/main.conf`:
+```
+Include /etc/nginx/modsec/modsecurity.conf
+Include /etc/nginx/owasp-crs/crs-setup.conf
+Include /etc/nginx/owasp-crs/rules/*.conf
+```
+
+Use the OWASP Core Rule Set (CRS) for baseline protection — install via `git clone https://github.com/coreruleset/coreruleset` and point the includes at it.
+
+## On Kubernetes (Ingress Controller)
+The Nginx Ingress Controller ships an optional ModSecurity build; enable via ConfigMap:
+```yaml
+data:
+  enable-modsecurity: "true"
+  enable-owasp-modsecurity-crs: "true"
+```
+
+## Test in detection-only mode first
+```
+SecRuleEngine DetectionOnly
+```
+Review `/var/log/nginx/modsec_audit.log` before switching to `On` (blocking) mode to avoid false-positive outages.
+
+---
+
 ## Final Notes
 
 - Nginx is the front door of most self-hosted DevOps stacks.
 - Keep configs modular (one file per app).
 - Always run `nginx -t` before reload.
 - Add TLS + security headers + access controls by default.
+- The same reverse-proxy/rate-limit/auth concepts carry over to Kubernetes Ingress via annotations; add a WAF (ModSecurity + OWASP CRS) for internet-facing endpoints.
