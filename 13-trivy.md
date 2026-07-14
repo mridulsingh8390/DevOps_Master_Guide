@@ -158,7 +158,48 @@ trivy image image:tag
 
 ---
 
-## 12) Daily cheat sheet
+## 12) Trivy Operator (Continuous In-Cluster Scanning)
+
+## Why
+Instead of scanning images only at build time, the Trivy Operator continuously scans workloads already running in the cluster and reports via CRDs.
+
+## Install via Helm
+```bash
+helm repo add aqua https://aquasecurity.github.io/helm-charts/
+helm repo update
+helm install trivy-operator aqua/trivy-operator \
+  -n trivy-system --create-namespace
+```
+
+## View results
+```bash
+kubectl get vulnerabilityreports -A
+kubectl get configauditreports -A
+kubectl describe vulnerabilityreport <name> -n <ns>
+```
+
+Reports regenerate automatically as new images/workloads are deployed or the vulnerability DB updates.
+
+---
+
+## 13) License Scanning
+
+## Why
+Catch restrictive/incompatible open-source licenses (GPL in a proprietary product, etc.) before they become a legal issue.
+
+```bash
+trivy image --scanners license nginx:1.27
+trivy fs --scanners license .
+```
+
+Filter by severity of license risk:
+```bash
+trivy image --scanners license --severity HIGH,CRITICAL myapp:latest
+```
+
+---
+
+## 14) Daily cheat sheet
 
 ```bash
 trivy image nginx:1.27
