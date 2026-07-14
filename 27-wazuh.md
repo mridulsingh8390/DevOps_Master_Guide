@@ -369,8 +369,95 @@ curl -k -u <user>:<pass> https://localhost:55000/security/user/authenticate
 
 ---
 
+## 23) Docker-Based Quickstart (Fast Lab Setup)
+
+## Why
+Faster than the full install script for local testing/evaluation — spins up manager + indexer + dashboard via Compose.
+
+```bash
+git clone https://github.com/wazuh/wazuh-docker.git -b v4.9.0
+cd wazuh-docker/single-node
+docker compose -f generate-indexer-certs.yml run --rm generator
+docker compose up -d
+```
+
+Access dashboard:
+- `https://localhost` (default admin credentials are in the repo's `.env` or docs for the pinned version)
+
+Tear down:
+```bash
+docker compose down -v
+```
+
+Good for evaluation/dev only — use the full install for anything persistent or production-facing.
+
+---
+
+## 24) Wazuh API Usage (Beyond Health Checks)
+
+## Why
+Automate agent management, rule queries, and cluster status from scripts/CI instead of clicking through the dashboard.
+
+## Authenticate and get a token
+```bash
+TOKEN=$(curl -s -u wazuh:<api_password> -k -X POST \
+  "https://localhost:55000/security/user/authenticate" | jq -r '.data.token')
+```
+
+## List agents
+```bash
+curl -s -k -X GET "https://localhost:55000/agents" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+## Restart an agent remotely
+```bash
+curl -s -k -X PUT "https://localhost:55000/agents/restart" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"agents_list":["001","002"]}' -H "Content-Type: application/json"
+```
+
+## Query active rules
+```bash
+curl -s -k -X GET "https://localhost:55000/rules?limit=10" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+---
+
+## 25) Cluster Mode (Multi-Manager Setup)
+
+## Why
+Single manager is a single point of failure and a ceiling on agent capacity — cluster mode distributes load across multiple manager nodes.
+
+## Key config (`/var/ossec/etc/ossec.conf` on each node)
+```xml
+<cluster>
+  <name>wazuh-cluster</name>
+  <node_name>node01</node_name>
+  <node_type>master</node_type>
+  <key>{cluster-key}</key>
+  <port>1516</port>
+  <bind_addr>0.0.0.0</bind_addr>
+  <nodes>
+    <node>10.0.0.10</node>
+  </nodes>
+  <disabled>no</disabled>
+</cluster>
+```
+Worker nodes use `<node_type>worker</node_type>` and point to the master's IP in `<nodes>`.
+
+## Verify cluster health
+```bash
+sudo /var/ossec/bin/cluster_control -l
+sudo /var/ossec/bin/cluster_control -i
+```
+
+---
+
 ## Final Notes
 
 - Wazuh is a strong open-source foundation for SIEM/XDR-style visibility.
 - Start with clean onboarding + baseline detections before enabling aggressive responses.
 - Success depends on continuous rule tuning, noise reduction, and incident playbook integration.
+- Use the Docker Compose path for quick evaluation, the API for automation, and cluster mode once a single manager becomes a bottleneck.
