@@ -444,9 +444,150 @@ sudo promtool check rules /etc/prometheus/alert_rules.yml
 
 ---
 
+## 15) Alertmanager (Full Setup)
+
+## Why
+Prometheus evaluates alert rules and fires alerts, but **Alertmanager** handles routing, grouping, deduplication, silencing, and delivery (email/Slack/webhook).
+
+## 15.1 Install
+```bash
+cd /tmp
+wget https://github.com/prometheus/alertmanager/releases/download/v0.27.0/alertmanager-0.27.0.linux-amd64.tar.gz
+tar -xvf alertmanager-0.27.0.linux-amd64.tar.gz
+sudo cp alertmanager-0.27.0.linux-amd64/alertmanager /usr/local/bin/
+sudo mkdir -p /etc/alertmanager
+```
+
+## 15.2 Config (`/etc/alertmanager/alertmanager.yml`)
+```yaml
+route:
+  receiver: default
+  group_by: ['alertname', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - match:
+        severity: critical
+      receiver: slack-critical
+
+receivers:
+  - name: default
+    email_configs:
+      - to: 'ops@example.com'
+        from: 'alertmanager@example.com'
+        smarthost: 'smtp.example.com:587'
+
+  - name: slack-critical
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/XXX/YYY/ZZZ'
+        channel: '#alerts-critical'
+        send_resolved: true
+```
+
+## 15.3 systemd service
+```bash
+cat <<'EOF' | sudo tee /etc/systemd/system/alertmanager.service
+[Unit]
+Description=Alertmanager
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now alertmanager
+```
+
+## 15.4 Silence an alert
+```bash
+amtool silence add alertname="HighCPU" --duration=2h --comment="planned maintenance"
+amtool silence query
+```
+
+Verify Prometheus is pointed at it (Section 7.3 in the base guide) and reload.
+
+---
+
+## 16) Blackbox Exporter (Endpoint/URL Probing)
+
+## Why
+Monitor external availability — HTTP status, TCP port open, DNS resolution, TLS cert expiry — not just internal host metrics.
+
+## Install
+```bash
+cd /tmp
+wget https://github.com/prometheus/blackbox_exporter/releases/download/v0.25.0/blackbox_exporter-0.25.0.linux-amd64.tar.gz
+tar -xvf blackbox_exporter-0.25.0.linux-amd64.tar.gz
+sudo cp blackbox_exporter-0.25.0.linux-amd64/blackbox_exporter /usr/local/bin/
+```
+
+## Basic module config (`/etc/blackbox/blackbox.yml`)
+```yaml
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200]
+```
+
+## Add scrape job to `prometheus.yml`
+```yaml
+- job_name: blackbox
+  metrics_path: /probe
+  params:
+    module: [http_2xx]
+  static_configs:
+    - targets:
+      - https://example.com
+      - https://api.example.com/health
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: localhost:9115
+```
+
+Query: `probe_success`, `probe_duration_seconds`, `probe_ssl_earliest_cert_expiry`.
+
+---
+
+## 17) Recording Rules (Precompute Expensive Queries)
+
+## Why
+Complex PromQL run every dashboard refresh is wasteful; recording rules precompute and store results as new time series.
+
+## Example (`/etc/prometheus/recording_rules.yml`)
+```yaml
+groups:
+- name: cpu-aggregations
+  interval: 30s
+  rules:
+  - record: instance:node_cpu_utilisation:rate5m
+    expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+```
+
+Reference in `prometheus.yml`:
+```yaml
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+  - /etc/prometheus/recording_rules.yml
+```
+
+Now dashboards/alerts can query the cheap precomputed metric: `instance:node_cpu_utilisation:rate5m`.
+
+---
+
 ## Final Notes
 
 - Prometheus is your source of truth for metrics.
 - Grafana is your lens (visualization + alert routing).
 - Start with essential infra metrics, then add app/business metrics.
 - Keep alerting actionable, not noisy.
+- Route alerts through Alertmanager for real notification delivery, and use recording rules once dashboards get query-heavy.
