@@ -306,7 +306,71 @@ docker compose logs -f dashboards
 
 ---
 
-## 15) Practice Tasks
+## 15) Index State Management (ISM) — Real Policy
+
+## Why
+Section 11 described the retention concept; here's an actual applyable policy that rolls over and deletes indices automatically.
+
+```bash
+curl -X PUT "localhost:9200/_plugins/_ism/policies/log-retention" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "policy": {
+      "description": "Rollover hot logs, delete after 45 days",
+      "default_state": "hot",
+      "states": [
+        {
+          "name": "hot",
+          "actions": [{ "rollover": { "min_index_age": "7d" } }],
+          "transitions": [{ "state_name": "delete", "conditions": { "min_index_age": "45d" } }]
+        },
+        {
+          "name": "delete",
+          "actions": [{ "delete": {} }]
+        }
+      ]
+    }
+  }'
+```
+
+Attach the policy to matching indices via an index template with `plugins.index_state_management.policy_id` set, or apply directly:
+```bash
+curl -X POST "localhost:9200/_plugins/_ism/add/app-logs*" \
+  -H 'Content-Type: application/json' \
+  -d '{"policy_id": "log-retention"}'
+```
+
+Check managed status:
+```bash
+curl -s "localhost:9200/_plugins/_ism/explain/app-logs*?pretty"
+```
+
+---
+
+## 16) Enabling the Security Plugin (Production)
+
+The lab config in Section 4 disables security (`plugins.security.disabled=true`). For anything beyond a lab, enable it:
+
+```yaml
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123!
+    # remove plugins.security.disabled=true
+```
+
+Default internal users/roles live in `config/opensearch-security/internal_users.yml` inside the container — update via the `securityadmin.sh` script after editing, or manage users/roles through Dashboards → Security once logged in as `admin`.
+
+Basic authenticated request afterward:
+```bash
+curl -s -u admin:StrongPassword123! https://localhost:9200/_cluster/health?pretty -k
+```
+
+---
+
+## 17) Practice Tasks
 
 1. Deploy OpenSearch + Dashboards via compose  
 2. Create custom mapped index and ingest sample logs  
