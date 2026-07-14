@@ -305,7 +305,75 @@ Include at minimum:
 
 ---
 
-## 13) Practice Tasks
+## 13) Parallel Execution and Order-Only Prerequisites
+
+## Parallel jobs
+```bash
+make -j4 test lint
+```
+Runs independent targets concurrently using up to 4 jobs. Only safe when targets don't share mutable state (e.g., writing to the same file).
+
+## `.NOTPARALLEL` (opt a target out)
+```make
+.NOTPARALLEL: deploy
+```
+
+## Order-only prerequisites (`|`)
+Use when a target needs a directory to exist first, but shouldn't rebuild just because the directory's timestamp changed:
+```make
+build/app: src/main.go | build
+	go build -o build/app src/main.go
+
+build:
+	mkdir -p build
+```
+
+Without the `|`, `make` would treat `build` as a normal prerequisite and rebuild `build/app` any time the directory changes — order-only prerequisites avoid that.
+
+---
+
+## 14) Additional Useful Hooks (Docker, Python, K8s)
+
+Extend the `.pre-commit-config.yaml` from Section 5:
+
+```yaml
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint-docker
+
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+
+  - repo: local
+    hooks:
+      - id: kubeconform
+        name: kubeconform
+        entry: kubeconform -strict -summary
+        language: system
+        files: ^k8s/.*\.ya?ml$
+```
+
+Why each:
+- `hadolint`: lints Dockerfiles for best-practice violations
+- `black`/`isort`/`flake8`: Python formatting, import ordering, and linting
+- `kubeconform`: validates K8s manifests against the schema before they ever reach `kubectl apply`
+
+---
+
+## 15) Practice Tasks
 
 1. Create Makefile with `help fmt lint test` targets  
 2. Add `.pre-commit-config.yaml` and install hooks  
@@ -316,9 +384,9 @@ Include at minimum:
 
 ---
 
-## 14) Example Files (Ready to Copy)
+## 16) Example Files (Ready to Copy)
 
-## 14.1 Minimal Makefile
+## 16.1 Minimal Makefile
 ```make
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -340,7 +408,7 @@ ci-check: fmt lint precommit ## Run all checks
 	@echo "Checks complete"
 ```
 
-## 14.2 Minimal pre-commit config
+## 16.2 Minimal pre-commit config
 ```yaml
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -354,7 +422,7 @@ repos:
 
 ---
 
-## 15) Daily Cheat Sheet
+## 17) Daily Cheat Sheet
 
 ```bash
 pre-commit install
