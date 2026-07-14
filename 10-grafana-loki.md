@@ -172,7 +172,72 @@ Common issues:
 
 ---
 
-## 9) Best practices
+## 9) Promtail (Loki's Native Log Shipper)
+
+## Why
+Fluent Bit/Fluentd work fine with Loki, but Promtail is Loki's purpose-built agent with tight label/pipeline integration.
+
+## Install
+```bash
+cd /tmp
+wget https://github.com/grafana/loki/releases/download/v3.1.0/promtail-linux-amd64.zip
+unzip promtail-linux-amd64.zip
+sudo mv promtail-linux-amd64 /usr/local/bin/promtail
+```
+
+## Config (`/etc/promtail/config.yml`)
+```yaml
+server:
+  http_listen_port: 9080
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: syslog
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: syslog
+          host: ${HOSTNAME}
+          __path__: /var/log/syslog
+```
+
+Run:
+```bash
+promtail -config.file=/etc/promtail/config.yml
+```
+
+---
+
+## 10) Retention and Compactor Config
+
+## Why
+Without retention, Loki keeps chunks forever — disk fills up. The compactor handles deletion/compaction for the filesystem store.
+
+Add to `/etc/loki/config.yml`:
+```yaml
+compactor:
+  working_directory: /var/lib/loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+
+limits_config:
+  retention_period: 720h   # 30 days
+```
+
+Restart Loki and verify with:
+```bash
+curl -s http://localhost:3100/config | grep -A3 retention
+```
+
+---
+
+## 11) Best practices
 
 1. Keep labels low-cardinality (`job`, `host`, `env`)
 2. Avoid per-request labels
@@ -182,7 +247,7 @@ Common issues:
 
 ---
 
-## 10) Practice tasks
+## 12) Practice tasks
 
 1. Install Loki and verify readiness  
 2. Connect Grafana Loki datasource  
