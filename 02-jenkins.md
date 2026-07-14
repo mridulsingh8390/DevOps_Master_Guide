@@ -520,9 +520,131 @@ sudo tar -czf /tmp/jenkins_backup_$(date +%F).tar.gz /var/lib/jenkins
 
 ---
 
+## 20) Shared Libraries (Reusable Pipeline Code)
+
+## Why
+Avoid copy-pasting the same stages across dozens of Jenkinsfiles — centralize common logic (build, notify, deploy) in a versioned Groovy library.
+
+## 20.1 Repo layout
+```
+(shared-library-repo)
+├── vars/
+│   └── buildAndPush.groovy
+├── src/
+│   └── org/example/Utils.groovy
+└── resources/
+```
+
+## 20.2 `vars/buildAndPush.groovy`
+```groovy
+def call(String imageName) {
+  sh "docker build -t ${imageName} ."
+  sh "docker push ${imageName}"
+}
+```
+
+## 20.3 Register library (Manage Jenkins → System → Global Pipeline Libraries)
+- Name: `shared-lib`
+- Default version: `main`
+- Retrieval: Modern SCM → Git → repo URL
+
+## 20.4 Use in Jenkinsfile
+```groovy
+@Library('shared-lib') _
+
+pipeline {
+  agent any
+  stages {
+    stage('Build & Push') {
+      steps {
+        buildAndPush("myrepo/myapp:${BUILD_NUMBER}")
+      }
+    }
+  }
+}
+```
+
+---
+
+## 21) Kubernetes Plugin (Dynamic Pod Agents)
+
+## Why
+Spin up ephemeral build agents as Kubernetes pods instead of static VMs — scales to zero, isolates builds.
+
+## 21.1 Install
+Manage Jenkins → Plugins → install "Kubernetes"
+
+## 21.2 Configure cloud (Manage Jenkins → Clouds → Kubernetes)
+- Kubernetes URL: `https://kubernetes.default.svc` (if Jenkins runs in-cluster)
+- Jenkins URL: internal service URL
+- Pod template: label (e.g. `docker-agent`), container image (e.g. `jenkins/inbound-agent`)
+
+## 21.3 Use in pipeline
+```groovy
+pipeline {
+  agent {
+    kubernetes {
+      yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: docker
+    image: docker:24-cli
+    command: ["cat"]
+    tty: true
+'''
+    }
+  }
+  stages {
+    stage('Build') {
+      steps {
+        container('docker') {
+          sh 'docker version'
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## 22) Configuration as Code (JCasC)
+
+## Why
+Define Jenkins global config (clouds, credentials refs, security) in versioned YAML instead of manual UI clicks — reproducible instances.
+
+## Example `jenkins.yaml`
+```yaml
+jenkins:
+  systemMessage: "Managed by JCasC"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: ${JENKINS_ADMIN_PASSWORD}
+```
+
+Point Jenkins at it:
+```bash
+export CASC_JENKINS_CONFIG=/var/lib/jenkins/jenkins.yaml
+```
+
+---
+
+## 23) Blue Ocean (Visual Pipeline UI)
+
+Install plugin "Blue Ocean" for a graphical pipeline view (stage timeline, easier debugging of parallel stages). Access via `/blue` path on the Jenkins URL. Mostly superseded in newer Jenkins by the built-in Pipeline graph view, but still common in existing installs.
+
+---
+
 ## Final Notes
 
 - Prefer pipeline-as-code over click-based config.
 - Keep secrets in Jenkins Credentials, never in Git.
 - Backup `/var/lib/jenkins` regularly.
 - Monitor plugin and Java compatibility on updates.
+- For scale, move to Kubernetes-based dynamic agents and manage global config with JCasC.
