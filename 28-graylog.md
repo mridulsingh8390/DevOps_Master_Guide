@@ -367,8 +367,110 @@ Graylog UI daily checks:
 
 ---
 
+## 23) Docker Compose Quickstart (Fast Lab Setup)
+
+## Why
+Fastest path to a working Graylog stack for evaluation/dev, without manually installing MongoDB/OpenSearch/Graylog separately.
+
+`docker-compose.yml`:
+```yaml
+services:
+  mongodb:
+    image: mongo:6
+    volumes:
+      - mongodb-data:/data/db
+
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+  graylog:
+    image: graylog/graylog:6.0
+    environment:
+      GRAYLOG_PASSWORD_SECRET: somepasswordpepper
+      GRAYLOG_ROOT_PASSWORD_SHA2: 8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918
+      GRAYLOG_HTTP_EXTERNAL_URI: "http://127.0.0.1:9000/"
+    entrypoint: /usr/bin/tini -- wait-for-it opensearch:9200 --  /docker-entrypoint.sh
+    ports:
+      - "9000:9000"
+      - "1514:1514/udp"
+      - "12201:12201/udp"
+    depends_on:
+      - mongodb
+      - opensearch
+
+volumes:
+  mongodb-data:
+  opensearch-data:
+```
+
+```bash
+docker compose up -d
+```
+Default login: `admin` / `admin` (the SHA2 above corresponds to `admin` — change it for anything beyond a throwaway lab).
+
+---
+
+## 24) GELF Input Details
+
+## Why
+GELF (Graylog Extended Log Format) is Graylog's native structured format — supports metadata, multi-line stack traces, and compression, unlike plain syslog.
+
+## Create a GELF UDP input (UI: System → Inputs → GELF UDP, port 12201)
+
+## Send a test GELF message
+```bash
+echo -n '{"version":"1.1","host":"myhost","short_message":"test event","level":6,"_service":"checkout"}' | \
+  nc -u -w1 localhost 12201
+```
+
+## App-native GELF logging (Python example)
+```python
+import logging
+import graypy
+
+logger = logging.getLogger("myapp")
+handler = graypy.GELFUDPHandler("localhost", 12201)
+logger.addHandler(handler)
+logger.error("Payment failed", extra={"order_id": "12345"})
+```
+Fields prefixed with `_` (like `_service`, `_order_id`) become searchable custom fields automatically.
+
+---
+
+## 25) Content Packs (Import/Export Config as Code)
+
+## Why
+Content packs bundle streams, dashboards, pipelines, and inputs into a portable JSON file — version-controllable and reusable across environments.
+
+## Export via UI
+System → Content Packs → Create content pack → select entities → Export
+
+## Import via API
+```bash
+curl -u admin:<password> -X POST "http://localhost:9000/api/system/content_packs" \
+  -H "Content-Type: application/json" \
+  -d @my-content-pack.json
+```
+
+## Apply an installed content pack
+```bash
+curl -u admin:<password> -X POST \
+  "http://localhost:9000/api/system/content_packs/<pack_id>/<revision>/installations"
+```
+
+Many official content packs (Nginx, Linux auth, Kubernetes) are available directly from the Graylog Marketplace and can bootstrap parsing/dashboards in minutes.
+
+---
+
 ## Final Notes
 
 - Graylog is excellent for centralized log operations and incident triage.
 - Focus on good stream design + parsing quality + retention policy early.
 - The biggest win comes from reducing noise and creating actionable alerts.
+- Use Docker Compose for quick evaluation, GELF for structured app-native logging, and content packs to version-control dashboards/pipelines across environments.
