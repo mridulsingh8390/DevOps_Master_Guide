@@ -333,6 +333,98 @@ gcloud secrets list
 
 ---
 
+## 17) Workload Identity Federation (Keyless CI Auth)
+
+## Why
+Let GitHub Actions/GitLab CI authenticate to GCP without downloading a long-lived service account JSON key.
+
+## Create a workload identity pool + provider
+```bash
+gcloud iam workload-identity-pools create github-pool \
+  --location=global --display-name="GitHub Pool"
+
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global \
+  --workload-identity-pool=github-pool \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository"
+```
+
+## Bind to a service account
+```bash
+gcloud iam service-accounts add-iam-policy-binding devops-ci@<PROJECT_ID>.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/attribute.repository/<org>/<repo>"
+```
+
+CI then exchanges its OIDC token for short-lived GCP credentials — no static key ever stored in secrets.
+
+---
+
+## 18) Terraform on GCP (Common Pattern)
+
+While `gcloud` is great for imperative ops, most production GCP infra is managed with Terraform:
+
+```hcl
+provider "google" {
+  project = "<PROJECT_ID>"
+  region  = "us-central1"
+}
+
+resource "google_storage_bucket" "artifacts" {
+  name     = "my-devops-artifacts-12345"
+  location = "US-CENTRAL1"
+}
+```
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+Use `gcloud` for day-2 debugging/inspection even when Terraform owns the desired state.
+
+---
+
+## 19) Pub/Sub Basics (Event-Driven Pipelines)
+
+```bash
+gcloud pubsub topics create build-events
+gcloud pubsub subscriptions create build-events-sub --topic=build-events
+
+# Publish
+gcloud pubsub topics publish build-events --message="build finished: myapp:1.0"
+
+# Pull
+gcloud pubsub subscriptions pull build-events-sub --auto-ack
+```
+
+Common DevOps use: trigger downstream automation (Slack notify, deploy step) on Cloud Build completion events.
+
+---
+
+## 20) Cloud Functions (Lightweight Serverless)
+
+```bash
+gcloud functions deploy notify-slack \
+  --gen2 \
+  --runtime=nodejs20 \
+  --trigger-topic=build-events \
+  --entry-point=main \
+  --region=us-central1
+```
+
+List/logs:
+```bash
+gcloud functions list
+gcloud functions logs read notify-slack --limit=20
+```
+
+Useful for small glue automation (webhook receivers, notification relays) without standing up a full service.
+
+---
+
 ## Final Notes
 
 - GCP DevOps becomes very efficient once you standardize around:
@@ -341,3 +433,4 @@ gcloud secrets list
   - GKE/Cloud Run
   - Secret Manager
 - Prioritize IAM design early; it prevents most long-term security problems.
+- Use Workload Identity Federation for CI auth instead of service account keys, and let Terraform own infra state while `gcloud` handles day-2 operations.
