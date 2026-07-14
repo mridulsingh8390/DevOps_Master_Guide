@@ -584,8 +584,102 @@ docker volume prune -f
 
 ---
 
+## 18) BuildKit / Buildx (Multi-Arch Builds)
+
+## Why
+Build images for multiple CPU architectures (amd64, arm64) from one machine — essential for Apple Silicon dev machines targeting x86 servers, or vice versa.
+
+## Check buildx
+```bash
+docker buildx version
+docker buildx ls
+```
+
+## Create and use a builder
+```bash
+docker buildx create --name multiarch --use
+docker buildx inspect --bootstrap
+```
+
+## Build and push multi-arch image
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t myrepo/myapp:v1 \
+  --push .
+```
+
+Note: `--push` is required for multi-platform builds (multi-arch manifests can't be loaded into local daemon directly with `--load`).
+
+## Build cache from/to registry (faster CI builds)
+```bash
+docker buildx build \
+  --cache-from type=registry,ref=myrepo/myapp:cache \
+  --cache-to type=registry,ref=myrepo/myapp:cache,mode=max \
+  -t myrepo/myapp:v1 --push .
+```
+
+---
+
+## 19) Image Signing and Verification (cosign)
+
+## Why
+Prove an image came from a trusted build and hasn't been tampered with — increasingly required in supply-chain-security-conscious pipelines.
+
+## Install
+```bash
+curl -LO https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+sudo chmod +x /usr/local/bin/cosign
+```
+
+## Generate keypair
+```bash
+cosign generate-key-pair
+```
+
+## Sign and verify an image
+```bash
+cosign sign --key cosign.key myrepo/myapp:v1
+cosign verify --key cosign.pub myrepo/myapp:v1
+```
+
+## Keyless signing (OIDC-based, e.g. in CI)
+```bash
+cosign sign myrepo/myapp:v1
+```
+
+---
+
+## 20) Rootless Docker
+
+## Why
+Run the Docker daemon and containers without root privileges — reduces blast radius if the daemon or a container is compromised.
+
+## Install
+```bash
+curl -fsSL https://get.docker.com/rootless | sh
+```
+
+## Enable and set env
+```bash
+systemctl --user start docker
+systemctl --user enable docker
+export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock
+```
+
+## Verify
+```bash
+docker info | grep -i rootless
+```
+
+Limitations: some networking features (e.g. certain `--net=host` behaviors) and low port binding (<1024) need extra config (`slirp4netns`, or granting `CAP_NET_BIND_SERVICE`).
+
+---
+
 ## Final Notes
 
 - Containers are immutable runtime units; rebuild image for app changes.
 - Compose is ideal for local dev; Swarm/Kubernetes for orchestration.
 - Learn Dockerfile optimization early—it impacts cost, speed, and security.
+- Use buildx for multi-arch, cosign for supply-chain trust, and consider rootless mode for hardened hosts.
