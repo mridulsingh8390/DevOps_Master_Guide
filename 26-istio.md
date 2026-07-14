@@ -395,8 +395,114 @@ kubectl get peerauthentication,authorizationpolicy -A
 
 ---
 
+## 21) Ambient Mesh (Sidecar-less Mode)
+
+## Why
+Classic Istio injects an Envoy sidecar into every pod — extra resource overhead per pod and operational complexity on upgrades. Ambient mode moves L4 processing to a per-node `ztunnel` and L7 processing to optional per-namespace waypoint proxies, so most workloads need no sidecar at all.
+
+## Install with ambient profile
+```bash
+istioctl install --set profile=ambient -y
+```
+
+## Add a namespace to the mesh (no injection label needed)
+```bash
+kubectl label namespace app istio.io/dataplane-mode=ambient
+```
+
+## Add L7 features (retries, routing) via a waypoint proxy where needed
+```bash
+istioctl waypoint apply -n app --enroll-namespace
+```
+
+Ambient is a good fit when you want mTLS and basic traffic policy everywhere, but only need rich L7 (retries/circuit-breaking/detailed routing) for a subset of services.
+
+---
+
+## 22) Gateway API (Successor to Istio's Gateway/VirtualService)
+
+## Why
+Kubernetes Gateway API is becoming the vendor-neutral standard for ingress/routing, and Istio supports it directly — worth knowing since new manifests increasingly use it instead of `Gateway`/`VirtualService`.
+
+## Example: Gateway + HTTPRoute
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: app-gateway
+  namespace: app
+spec:
+  gatewayClassName: istio
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: reviews-route
+  namespace: app
+spec:
+  parentRefs:
+  - name: app-gateway
+  rules:
+  - matches:
+    - path:
+        value: /reviews
+    backendRefs:
+    - name: reviews
+      port: 9080
+```
+
+---
+
+## 23) Multi-Cluster Mesh (Concept)
+
+## Why
+Span a single mesh across multiple Kubernetes clusters — for DR, region failover, or splitting a large mesh by team/environment.
+
+## Common topologies
+- **Multi-primary**: each cluster runs its own `istiod`, meshes are federated via shared trust (shared root CA)
+- **Primary-remote**: one cluster runs `istiod`, others are managed remotely
+
+## High-level setup steps
+1. Generate a shared root CA and issue intermediate CAs per cluster (establishes trust)
+2. Install Istio in each cluster with the shared trust config
+3. Enable API server access between clusters (`istioctl create-remote-secret`)
+4. Verify cross-cluster service discovery:
+```bash
+istioctl remote-clusters
+```
+
+---
+
+## 24) WasmPlugins (Custom Envoy Extensions)
+
+## Why
+Extend Envoy's request/response handling with custom logic (custom auth, header manipulation, request transformation) without forking Envoy — compiled to WebAssembly.
+
+```yaml
+apiVersion: extensions.istio.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: custom-auth
+  namespace: app
+spec:
+  selector:
+    matchLabels:
+      app: productpage
+  url: oci://myrepo/wasm-plugins/custom-auth:1.0
+  phase: AUTHN
+```
+
+Common use cases: custom rate limiting logic, header-based routing decisions, lightweight auth checks that don't warrant a full sidecar service.
+
+---
+
 ## Final Notes
 
 - Istio is powerful but should be introduced gradually.
 - Master traffic routing + observability first, then enforce security policies.
 - Pair Istio with GitOps (Argo CD) for reliable, auditable mesh config lifecycle.
+- Consider ambient mode to cut sidecar overhead, and adopt the Kubernetes Gateway API for new routing config going forward.
