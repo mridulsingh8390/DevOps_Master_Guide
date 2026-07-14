@@ -331,8 +331,102 @@ journalctl -u oneagent -f
 
 ---
 
+## 22) Grail (Unified Data Lakehouse)
+
+## Why
+Newer Dynatrace platform versions store logs, metrics, traces, and events in a unified data lakehouse called **Grail**, queried with a single language (DQL) instead of separate silos per data type.
+
+## DQL basics (Notebooks or API)
+```dql
+fetch logs
+| filter k8s.namespace.name == "dev"
+| filter loglevel == "ERROR"
+| summarize count(), by:{dt.entity.service}
+```
+
+```dql
+fetch spans
+| filter request.is_failed == true
+| summarize count(), by:{service.name}
+| sort count() desc
+```
+
+Grail's advantage over the classic model: correlate logs/traces/metrics/events in one query without separate export/import pipelines.
+
+---
+
+## 23) Configuration as Code (Monaco)
+
+## Why
+Manage dashboards, alerting profiles, management zones, and other config declaratively in Git instead of clicking through the UI per environment — essential once you have more than one tenant (dev/stage/prod).
+
+## Install Monaco
+```bash
+curl -L https://github.com/Dynatrace/dynatrace-configuration-as-code/releases/latest/download/monaco-linux-amd64 -o monaco
+chmod +x monaco
+```
+
+## Example config structure
+```
+project/
+├── manifest.yaml
+└── alerting-profile/
+    └── config.yaml
+```
+
+## Deploy config to an environment
+```bash
+./monaco deploy manifest.yaml
+```
+
+Pairs naturally with a Git-based promotion flow: change reviewed in a PR → applied to dev → promoted to prod after validation.
+
+---
+
+## 24) Extensions Framework (Custom Metrics/Integrations)
+
+## Why
+Pull in telemetry Dynatrace doesn't natively understand — custom hardware, niche databases, internal services — via the Extensions 2.0 framework.
+
+## High-level flow
+1. Define an extension YAML (metrics, endpoints, polling interval)
+2. Package and upload via `dt-cli` or the UI
+3. Deploy to an ActiveGate or OneAgent-monitored host
+4. Metrics appear alongside native Dynatrace data, usable in dashboards/alerts like any other metric
+
+```bash
+dt extension init my-custom-extension
+dt extension build
+dt extension upload my-custom-extension.zip
+```
+
+---
+
+## 25) Davis AI / Problems API (Automation Hook)
+
+## Why
+Pull correlated "Problems" (Davis AI's root-cause-analyzed incidents) into external tools (ticketing, ChatOps) instead of only viewing them in the UI.
+
+## Query recent problems
+```bash
+curl -X GET "https://<tenant>.live.dynatrace.com/api/v2/problems" \
+  -H "Authorization: Api-Token <TOKEN>"
+```
+
+## Filter to open, high-impact problems
+```bash
+curl -G "https://<tenant>.live.dynatrace.com/api/v2/problems" \
+  -H "Authorization: Api-Token <TOKEN>" \
+  --data-urlencode 'problemSelector=status(OPEN),severityLevel(AVAILABILITY)'
+```
+
+Use this to auto-create tickets, post to Slack, or feed an internal incident dashboard — the same root-cause data Davis surfaces in-app.
+
+---
+
 ## Final Notes
 
 - Dynatrace is strongest when you combine: topology + traces + logs + SLOs + deployment context.
 - Success depends on thoughtful tagging, alert tuning, and ownership mapping.
 - Start small, standardize onboarding, then scale across teams.
+- Once running multiple tenants/environments, manage config with Monaco instead of manual UI clicks, and use the Problems API to wire Davis AI's findings into your existing incident workflow.
