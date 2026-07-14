@@ -337,8 +337,142 @@ aws ecs list-clusters
 
 ---
 
+## 19) AWS SSO / IAM Identity Center Login
+
+## Why
+Preferred over long-lived access keys for interactive CLI use — short-lived, centrally managed credentials.
+
+## Configure
+```bash
+aws configure sso
+```
+Prompts for SSO start URL, region, and account/role selection.
+
+## Login / refresh session
+```bash
+aws sso login --profile my-sso-profile
+aws sts get-caller-identity --profile my-sso-profile
+```
+
+Use the profile in commands:
+```bash
+export AWS_PROFILE=my-sso-profile
+aws s3 ls
+```
+
+---
+
+## 20) CloudFormation Basics
+
+## Why
+Declarative, native AWS infrastructure-as-code — a common alternative/complement to Terraform for AWS-only stacks.
+
+## Minimal template (`stack.yaml`)
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-devops-artifacts-12345
+```
+
+## Deploy
+```bash
+aws cloudformation deploy \
+  --template-file stack.yaml \
+  --stack-name devops-lab-stack \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+## Inspect / delete
+```bash
+aws cloudformation describe-stacks --stack-name devops-lab-stack
+aws cloudformation delete-stack --stack-name devops-lab-stack
+```
+
+---
+
+## 21) ECS Fargate Task Definition (Full Example)
+
+```json
+{
+  "family": "myapp-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "myapp",
+      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/myapp:1.0",
+      "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/myapp",
+          "awslogs-region": "<region>",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
+```
+
+Register and run:
+```bash
+aws ecs register-task-definition --cli-input-json file://task-def.json
+aws ecs run-task \
+  --cluster my-cluster \
+  --launch-type FARGATE \
+  --task-definition myapp-task \
+  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxx],securityGroups=[sg-xxxx],assignPublicIp=ENABLED}"
+```
+
+---
+
+## 22) VPC Basics (Networking Fundamentals)
+
+```bash
+aws ec2 create-vpc --cidr-block 10.0.0.0/16
+aws ec2 create-subnet --vpc-id vpc-xxxx --cidr-block 10.0.1.0/24 --availability-zone <region>a
+aws ec2 create-internet-gateway
+aws ec2 attach-internet-gateway --vpc-id vpc-xxxx --internet-gateway-id igw-xxxx
+aws ec2 describe-vpcs --output table
+aws ec2 describe-subnets --filters "Name=vpc-id,Values=vpc-xxxx" --output table
+```
+
+Security groups (the "firewall" most DevOps work touches daily):
+```bash
+aws ec2 create-security-group --group-name web-sg --description "Web SG" --vpc-id vpc-xxxx
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-xxxx --protocol tcp --port 443 --cidr 0.0.0.0/0
+```
+
+---
+
+## 23) Combining `--query` with `jq` for Complex Output
+
+`--query` (JMESPath, built into the CLI) handles most cases, but `jq` is useful for post-processing or when chaining with other JSON tools:
+
+```bash
+aws ec2 describe-instances --output json | \
+  jq -r '.Reservations[].Instances[] | select(.State.Name=="running") | .InstanceId'
+```
+
+Combine both — narrow server-side with `--query`, reshape client-side with `jq`:
+```bash
+aws ec2 describe-instances \
+  --query "Reservations[].Instances[].{id:InstanceId,state:State.Name}" \
+  --output json | jq 'group_by(.state)'
+```
+
+---
+
 ## Final Notes
 
 - AWS CLI is foundational for cloud automation.
 - Build strong IAM habits early (least privilege + short-lived creds).
 - Integrate CLI commands into Makefiles and CI pipelines for repeatable ops.
+- Prefer SSO-based auth over static keys locally, and reach for CloudFormation (or Terraform) once click-ops stops scaling.
