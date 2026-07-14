@@ -338,8 +338,73 @@ helm template test ./mychart -f values.yaml
 
 ---
 
+## 14) Secrets in Values (helm-secrets + SOPS)
+
+## Why
+Plain `values-prod.yaml` often needs passwords/tokens — committing them in plaintext is unsafe. `helm-secrets` (a Helm plugin wrapping SOPS) lets you commit encrypted values files.
+
+## Install
+```bash
+helm plugin install https://github.com/jkroepke/helm-secrets
+sudo apt install -y sops
+```
+
+## Encrypt a values file (using age or GPG key configured in SOPS)
+```bash
+sops --encrypt --age <age_public_key> values-secret.yaml > values-secret.enc.yaml
+```
+
+## Install/upgrade using encrypted values
+```bash
+helm secrets upgrade --install my-app ./chart -f values-secret.enc.yaml
+```
+
+`helm secrets` decrypts in-memory at deploy time only — the encrypted file is safe to commit to Git.
+
+---
+
+## 15) Chart Testing (`ct` / `helm unittest`)
+
+## Why
+Validate charts render correctly and pass lint rules in CI, before merging.
+
+## chart-testing (lints + installs charts in a kind cluster)
+```bash
+# install via package or download binary
+ct lint --chart-dirs charts --target-branch main
+ct install --chart-dirs charts --target-branch main
+```
+
+## helm unittest plugin (fast, no cluster needed)
+```bash
+helm plugin install https://github.com/helm-unittest/helm-unittest
+```
+
+Example test (`tests/deployment_test.yaml`):
+```yaml
+suite: test deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: should set replica count
+    set:
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+```
+
+Run:
+```bash
+helm unittest ./hello-chart
+```
+
+---
+
 ## Final Notes
 
 - Use Helm as the default packaging layer for Kubernetes apps.
 - Keep environment-specific values separate (`values-dev.yaml`, `values-prod.yaml`).
 - Always run `helm lint` + `helm template` before applying in production.
+- Encrypt sensitive values with helm-secrets/SOPS, and add `ct`/`helm unittest` to CI for chart changes.
