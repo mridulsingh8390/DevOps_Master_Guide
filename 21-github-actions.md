@@ -303,7 +303,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build image
-      run: docker build -t myapp:${{ github.sha }} .
+        run: docker build -t myapp:${{ github.sha }} .
 
       - name: Trivy scan
         uses: aquasecurity/trivy-action@0.24.0
@@ -392,9 +392,128 @@ Quick checks:
 
 ---
 
+## 20) Self-Hosted Runner Setup
+
+## Why
+Needed for private network access, custom hardware (GPU), or licensed tooling GitHub-hosted runners don't have.
+
+## Register a runner (from repo/org Settings → Actions → Runners → New self-hosted runner)
+```bash
+mkdir actions-runner && cd actions-runner
+curl -o actions-runner-linux-x64.tar.gz -L \
+  https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
+tar xzf actions-runner-linux-x64.tar.gz
+
+./config.sh --url https://github.com/<org>/<repo> --token <REGISTRATION_TOKEN>
+sudo ./svc.sh install
+sudo ./svc.sh start
+```
+
+## Target it in a workflow
+```yaml
+jobs:
+  build:
+    runs-on: self-hosted
+```
+Or with labels for specific hardware:
+```yaml
+runs-on: [self-hosted, linux, gpu]
+```
+
+Security note: self-hosted runners on public repos are risky — a malicious PR can execute code on your infrastructure. Restrict to private repos or require approval for fork PRs (Settings → Actions → Fork pull request workflows).
+
+---
+
+## 21) Concurrency Control
+
+## Why
+Prevent overlapping deploys or wasted runs when someone pushes multiple commits quickly.
+
+```yaml
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+```
+
+Placed at the workflow or job level — cancels any in-progress run with the same group key when a new one starts.
+
+---
+
+## 22) Container Jobs and Service Containers
+
+## Run the job itself inside a container
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: node:20-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm test
+```
+
+## Spin up service containers (e.g., a database for integration tests)
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: psql -h localhost -U postgres -c '\l'
+        env:
+          PGPASSWORD: test
+```
+
+---
+
+## 23) GitHub CLI (`gh`) for Automation
+
+## Why
+Script repo/PR/workflow operations from the terminal or from inside workflow steps.
+
+## Install
+```bash
+sudo apt install -y gh
+gh auth login
+```
+
+## Common operations
+```bash
+gh pr create --title "feat: new endpoint" --body "Adds X" --base main
+gh pr list
+gh pr checks <pr-number>
+gh workflow list
+gh workflow run ci.yml
+gh run list --workflow=ci.yml
+gh run watch
+gh secret set API_TOKEN --body "abc123"
+```
+
+Useful inside a workflow step too (authenticated automatically via `GITHUB_TOKEN`):
+```yaml
+- name: Comment on PR
+  run: gh pr comment ${{ github.event.pull_request.number }} --body "Build passed ✅"
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+---
+
 ## Final Notes
 
 - GitHub Actions is enough for most modern CI/CD needs.
 - Standardize a reusable workflow library early.
 - Pair with branch protection, security scans, and environment approvals for production-grade pipelines.
-```
+- Use concurrency groups to avoid overlapping deploys, and reach for `gh` CLI to script anything the UI would otherwise require clicking through.
