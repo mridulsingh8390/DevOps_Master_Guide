@@ -383,8 +383,80 @@ index=<index_name> earliest=-15m
 
 ---
 
+## 23) Splunkbase Apps and Add-ons
+
+## Why
+Most data sources (AWS, Nginx, Kubernetes, Windows) have pre-built Technology Add-ons (TAs) on Splunkbase that handle parsing/field extraction/dashboards out of the box — avoid rebuilding this from scratch.
+
+## Install via UI
+Apps → Find More Apps → search (e.g., "Splunk Add-on for Amazon Web Services") → Install
+
+## Install via CLI (offline package)
+```bash
+/opt/splunk/bin/splunk install app /path/to/app.tar.gz -auth admin:<password>
+sudo /opt/splunk/bin/splunk restart
+```
+
+Common starting set: Splunk Add-on for Unix and Linux, Splunk Add-on for AWS, Splunk App for Nginx, Splunk Add-on for Kubernetes.
+
+---
+
+## 24) CIM (Common Information Model)
+
+## Why
+CIM normalizes field names across different data sources (e.g., `src_ip` means the same thing whether the data came from a firewall or a web server) — required for Splunk ES correlation searches and for dashboards/apps that expect standardized fields.
+
+## Key idea
+Map your custom sourcetype's fields to CIM-compliant field names using field aliases or `eval` in props.conf:
+
+```
+[my_custom_app]
+FIELDALIAS-cim = source_ip AS src_ip, user_name AS user
+```
+
+## Validate compliance
+Install the "CIM Validation" or "Splunk Add-on Builder" app, or spot-check with:
+```spl
+| datamodel Authentication search
+```
+If your events don't appear in the relevant data model search, the CIM mapping needs work.
+
+Getting this right up front saves significant rework once you adopt Enterprise Security or any CIM-dependent app.
+
+---
+
+## 25) Splunk Operator for Kubernetes
+
+## Why
+Run Splunk indexer/search-head clusters natively on Kubernetes instead of static VMs — useful when the rest of your platform is already K8s-native.
+
+## Install operator
+```bash
+kubectl apply -f https://github.com/splunk/splunk-operator/releases/latest/download/splunk-operator-install.yaml
+```
+
+## Deploy a standalone instance
+```yaml
+apiVersion: enterprise.splunk.com/v4
+kind: Standalone
+metadata:
+  name: s1
+  namespace: splunk
+spec:
+  splunkVolumes: []
+```
+```bash
+kubectl apply -f standalone.yaml -n splunk
+kubectl get pods -n splunk
+```
+
+For production, use `ClusterMaster` + `IndexerCluster` + `SearchHeadCluster` CRDs together — see the operator docs for the full clustered topology.
+
+---
+
 ## Final Notes
 
 - Splunk is extremely powerful when data onboarding and field hygiene are done well.
 - Start with clean index strategy, structured sourcetypes, and actionable alerts.
 - Focus on signal quality over log volume to control cost and improve incident response.
+- Lean on Splunkbase add-ons instead of hand-rolling parsers, map custom sourcetypes to CIM early, and consider the Splunk Operator if your platform is already Kubernetes-centric.
