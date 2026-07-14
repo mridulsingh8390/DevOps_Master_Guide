@@ -110,7 +110,92 @@ Common issues:
 
 ---
 
-## 8) Practice tasks
+## 8) Multiple Outputs and Routing by Tag
+
+Fluent Bit routes records by tag matching, so you can send different logs to different backends from one config:
+
+```ini
+[INPUT]
+    Name   tail
+    Path   /var/log/app/*.log
+    Tag    app.*
+
+[INPUT]
+    Name   tail
+    Path   /var/log/syslog
+    Tag    system.syslog
+
+[OUTPUT]
+    Name   loki
+    Match  app.*
+    Host   127.0.0.1
+    Port   3100
+    Labels job=app
+
+[OUTPUT]
+    Name   es
+    Match  system.*
+    Host   127.0.0.1
+    Port   9200
+    Index  syslog
+```
+
+---
+
+## 9) Real Kubernetes DaemonSet Manifest
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: logging
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      containers:
+      - name: fluent-bit
+        image: fluent/fluent-bit:3.1
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+        - name: config
+          mountPath: /fluent-bit/etc
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: config
+        configMap:
+          name: fluent-bit-config
+```
+
+Key input for containers:
+```ini
+[INPUT]
+    Name              tail
+    Path              /var/log/containers/*.log
+    Parser            docker
+    Tag               kube.*
+
+[FILTER]
+    Name                kubernetes
+    Match               kube.*
+    Kube_URL            https://kubernetes.default.svc:443
+    Merge_Log           On
+```
+
+The `kubernetes` filter enriches each record with pod name, namespace, labels, and container name by querying the Kubernetes API.
+
+---
+
+## 10) Practice tasks
 
 1. Tail syslog and print stdout  
 2. Add host metadata via filter  
