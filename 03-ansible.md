@@ -482,8 +482,87 @@ ansible-playbook -i inventory.ini site.yml -vvv
 
 ---
 
+## 17) Dynamic Inventory
+
+## Why
+Static inventory files don't scale for cloud environments where hosts come and go. Dynamic inventory queries the source of truth (AWS, Azure, GCP, etc.) at runtime.
+
+## Example: AWS EC2 dynamic inventory plugin (`aws_ec2.yml`)
+```yaml
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+filters:
+  tag:Environment: production
+keyed_groups:
+  - key: tags.Role
+    prefix: role
+```
+
+Requires collection:
+```bash
+ansible-galaxy collection install amazon.aws
+```
+
+Use it:
+```bash
+ansible-inventory -i aws_ec2.yml --graph
+ansible-playbook -i aws_ec2.yml site.yml
+```
+
+---
+
+## 18) ansible-pull (Agent-Style Model)
+
+## Why
+Instead of pushing from a control node, each host pulls its own config from Git on a schedule — useful for large fleets or disconnected/edge nodes.
+
+```bash
+ansible-pull -U https://github.com/<org>/<repo>.git site.yml
+```
+
+Typical setup: cron job or systemd timer running `ansible-pull` every N minutes on each managed node.
+
+---
+
+## 19) Collections
+
+## Why
+Ansible ships core modules separately from community/vendor content via **collections** — the modern way to extend Ansible (replaces older "role from Galaxy" pattern for provider-specific modules).
+
+```bash
+ansible-galaxy collection install community.general
+ansible-galaxy collection install azure.azcollection
+ansible-galaxy collection list
+```
+
+Reference in playbook:
+```yaml
+- hosts: web
+  tasks:
+    - name: Use a community module
+      community.general.ufw:
+        rule: allow
+        port: '22'
+      become: yes
+```
+
+`requirements.yml` for reproducible installs:
+```yaml
+collections:
+  - name: community.general
+    version: ">=8.0.0"
+  - name: amazon.aws
+```
+```bash
+ansible-galaxy collection install -r requirements.yml
+```
+
+---
+
 ## Final Notes
 
 - Start with simple playbooks, then refactor into roles.
 - Vault is mandatory for any secrets.
 - Most production incidents come from missing validation—use `--check --diff`.
+- For cloud fleets, prefer dynamic inventory and pin collection versions in `requirements.yml`.
