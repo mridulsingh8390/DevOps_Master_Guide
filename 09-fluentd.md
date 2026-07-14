@@ -126,7 +126,76 @@ Common issues:
 
 ---
 
-## 8) Practice tasks
+## 8) Routing to Multiple Destinations (`<label>` and `copy`)
+
+## Using labels to organize pipelines
+```conf
+<source>
+  @type tail
+  path /var/log/app/*.log
+  tag app.raw
+  <parse>
+    @type json
+  </parse>
+</source>
+
+<match app.raw>
+  @type relabel
+  @label @APP
+</match>
+
+<label @APP>
+  <match **>
+    @type copy
+    <store>
+      @type loki
+      url "http://127.0.0.1:3100"
+    </store>
+    <store>
+      @type stdout
+    </store>
+  </match>
+</label>
+```
+
+`copy` fans the same records out to multiple outputs (Loki + stdout here) — useful for shipping to a primary backend while keeping a local debug stream.
+
+---
+
+## 9) Kubernetes Deployment (fluentd as DaemonSet)
+
+Fluentd is commonly deployed via the official `fluent/fluentd-kubernetes-daemonset` image, which bundles Kubernetes metadata filtering:
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+  namespace: logging
+spec:
+  selector:
+    matchLabels:
+      app: fluentd
+  template:
+    metadata:
+      labels:
+        app: fluentd
+    spec:
+      containers:
+      - name: fluentd
+        image: fluent/fluentd-kubernetes-daemonset:v1.17-debian-loki-1
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+```
+
+---
+
+## 10) Practice tasks
 
 1. Tail syslog and print to stdout  
 2. Add record transformer fields  
