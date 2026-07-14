@@ -259,7 +259,52 @@ Persist in `/etc/sysctl.conf` where appropriate.
 
 ---
 
-## 14) Practice tasks
+## 14) Importing External Issues (Generic Issue Import)
+
+## Why
+Feed results from other tools (custom linters, security scanners) into SonarQube's issue list for a single pane of glass.
+
+Generate a report in SonarQube's generic issue JSON format, then reference it in the scan:
+```properties
+sonar.externalIssuesReportPaths=external-issues.json
+```
+
+Example minimal report format:
+```json
+{
+  "issues": [
+    {
+      "engineId": "custom-lint",
+      "ruleId": "no-hardcoded-secret",
+      "severity": "CRITICAL",
+      "type": "VULNERABILITY",
+      "primaryLocation": {
+        "message": "Hardcoded secret detected",
+        "filePath": "src/config.py",
+        "textRange": { "startLine": 12, "endLine": 12 }
+      }
+    }
+  ]
+}
+```
+
+---
+
+## 15) Branch and Pull Request Decoration (Setup Detail)
+
+If running Developer Edition or higher (or SonarCloud), configure PR decoration to post inline comments on GitHub/GitLab merge requests:
+
+```properties
+sonar.pullrequest.key=42
+sonar.pullrequest.branch=feature/auth
+sonar.pullrequest.base=main
+```
+
+In Jenkins, this is usually populated automatically from the SCM plugin when triggered from a PR build; for manual scans, pass these properties explicitly along with a configured ALM (GitHub/GitLab) integration under Administration → DevOps Platform Integrations.
+
+---
+
+## 16) Practice tasks
 
 1. Install SonarQube + PostgreSQL  
 2. Scan sample repo with SonarScanner  
@@ -269,7 +314,7 @@ Persist in `/etc/sysctl.conf` where appropriate.
 
 ---
 
-## 15) Daily cheat sheet
+## 17) Daily cheat sheet
 
 ```bash
 # Service
