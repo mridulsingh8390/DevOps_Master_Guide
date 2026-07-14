@@ -365,8 +365,143 @@ az pipelines list -o table
 
 ---
 
+## 19) Bicep (Azure-Native IaC)
+
+## Why
+Declarative, Azure-native alternative to hand-written ARM JSON — compiles down to ARM templates but is far more readable.
+
+## Minimal template (`main.bicep`)
+```bicep
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: 'devopsstorage12345'
+  location: resourceGroup().location
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+}
+```
+
+## Deploy
+```bash
+az deployment group create \
+  --resource-group rg-devops-lab \
+  --template-file main.bicep
+```
+
+## Validate/preview changes before applying
+```bash
+az deployment group what-if \
+  --resource-group rg-devops-lab \
+  --template-file main.bicep
+```
+
+---
+
+## 20) Azure Functions (Serverless Basics)
+
+```bash
+az functionapp create \
+  --resource-group rg-devops-lab \
+  --consumption-plan-location eastus \
+  --runtime node \
+  --functions-version 4 \
+  --name my-devops-func \
+  --storage-account devopsstorage12345
+```
+
+Deploy code (from a project directory with `func` CLI):
+```bash
+func azure functionapp publish my-devops-func
+```
+
+---
+
+## 21) Azure Boards (Work Item Tracking via CLI)
+
+```bash
+az boards work-item create \
+  --title "Fix pipeline flakiness" \
+  --type "Bug" \
+  --project <project>
+
+az boards work-item show --id 123
+az boards work-item update --id 123 --state "Active"
+```
+
+Useful for scripting sprint/backlog automation, or auto-creating tickets from CI failures.
+
+---
+
+## 22) Variable Groups and YAML Pipeline Templates
+
+## Variable group (create via CLI, link secrets from Key Vault)
+```bash
+az pipelines variable-group create \
+  --name shared-vars \
+  --variables ENV=prod \
+  --project <project>
+```
+
+Reference in pipeline:
+```yaml
+variables:
+  - group: shared-vars
+```
+
+## Reusable pipeline templates (`templates/build.yml`)
+```yaml
+parameters:
+  - name: buildConfiguration
+    default: Release
+
+steps:
+  - script: echo "Building with ${{ parameters.buildConfiguration }}"
+```
+
+Consume via `extends` or `template`:
+```yaml
+stages:
+- stage: Build
+  jobs:
+  - job: BuildJob
+    steps:
+    - template: templates/build.yml
+      parameters:
+        buildConfiguration: Release
+```
+
+This is the Azure DevOps equivalent of GitHub Actions' reusable workflows — centralize common stages across many pipelines.
+
+---
+
+## 23) Self-Hosted Agents
+
+## Why
+Needed for private network access to on-prem resources, or custom tooling not on Microsoft-hosted images.
+
+## Register an agent
+```bash
+mkdir agent && cd agent
+curl -O https://vstsagentpackage.azureedge.net/agent/<version>/vsts-agent-linux-x64-<version>.tar.gz
+tar zxvf vsts-agent-linux-x64-<version>.tar.gz
+
+./config.sh --url https://dev.azure.com/<org> --auth pat --token <PAT> --pool Default
+sudo ./svc.sh install
+sudo ./svc.sh start
+```
+
+Target it in a pipeline:
+```yaml
+pool:
+  name: Default
+```
+
+---
+
 ## Final Notes
 
 - Azure CLI + Azure DevOps is a powerful enterprise DevOps combination.
 - Build around managed identity, Key Vault, and least privilege from day one.
 - Standardize pipeline templates to scale across teams.
+- Prefer Bicep over raw ARM JSON for new IaC, and centralize shared pipeline logic with YAML templates once you have more than a couple of pipelines.
